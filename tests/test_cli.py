@@ -4,7 +4,7 @@ import pytest
 from busylib import types
 from busylib.exceptions import BusyBarAPIError
 
-from busybar_calendar import cli
+from busybar_calendar import cli, connect, diagnose
 from busybar_calendar.config import CONFIG_ENV, Config, ConfigError, find
 
 SOURCES = {"sources": [{"name": "Feed", "type": "ics", "url": "https://x"}]}
@@ -66,9 +66,9 @@ class FakeSource:
 
 async def check(monkeypatch, capsys, bar, data=None):
     config = Config.model_validate(data or SOURCES)
-    monkeypatch.setattr(cli, "_bar", lambda _config: bar)
-    monkeypatch.setattr(cli, "_sources", lambda _config: [FakeSource()])
-    code = await cli.cmd_check(config, None)
+    monkeypatch.setattr(connect, "make_bar", lambda _config: bar)
+    monkeypatch.setattr(connect, "make_sources", lambda _config: [FakeSource()])
+    code = await diagnose.check(config)
     return code, capsys.readouterr().out
 
 
@@ -102,7 +102,7 @@ async def test_status_without_a_config(monkeypatch, capsys):
 
     monkeypatch.setattr(service, "status", lambda: service.Status(False, False))
     monkeypatch.setattr(service, "recent_log", lambda state: [])
-    assert await cli.cmd_status(None, None) == 0
+    assert await diagnose.status(None) == 0
     out = capsys.readouterr().out
     assert "not installed" in out and "busybar-calendar install" in out
     assert "busybar-calendar init" in out
@@ -133,8 +133,8 @@ async def test_status_shows_now_and_next(monkeypatch, capsys, tmp_path):
         async def aclose(self):
             pass
 
-    monkeypatch.setattr(cli, "_sources", lambda config: [Source()])
-    assert await cli.cmd_status(Config.model_validate(SOURCES), None) == 0
+    monkeypatch.setattr(connect, "make_sources", lambda config: [Source()])
+    assert await diagnose.status(Config.model_validate(SOURCES)) == 0
     out = capsys.readouterr().out
     assert "running, pid 4321" in out
     assert "reminder: Design review" in out  # the log tail
@@ -157,9 +157,9 @@ async def test_check_as_json(monkeypatch, capsys):
     import json
 
     config = Config.model_validate(SOURCES)
-    monkeypatch.setattr(cli, "_bar", lambda _config: FakeBar())
-    monkeypatch.setattr(cli, "_sources", lambda _config: [FakeSource()])
-    code = await cli.cmd_check(config, argparse.Namespace(json=True))
+    monkeypatch.setattr(connect, "make_bar", lambda _config: FakeBar())
+    monkeypatch.setattr(connect, "make_sources", lambda _config: [FakeSource()])
+    code = await cli.cmd_check(config, argparse.Namespace(json=True))  # through the CLI
     result = json.loads(capsys.readouterr().out)  # nothing else on stdout
     assert code == 0
     assert result["ok"] is True
@@ -199,7 +199,7 @@ async def test_status_as_json(monkeypatch, capsys):
         async def aclose(self):
             pass
 
-    monkeypatch.setattr(cli, "_sources", lambda config: [Source()])
+    monkeypatch.setattr(connect, "make_sources", lambda config: [Source()])
     await cli.cmd_status(Config.model_validate(SOURCES), argparse.Namespace(json=True))
     data = json.loads(capsys.readouterr().out)
     assert data["service"] == {

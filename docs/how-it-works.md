@@ -41,6 +41,15 @@ reminder on top of a BUSY session or the clock the way the integration does.
 | `schedule.py` | Pure logic: which screen is due now, and when that next changes. |
 | `render.py` | The display elements for a screen, and its sound. |
 | `runner.py` | The loop: refresh, decide, draw or clear, sleep until the next change. |
+| `icons.py` | The red calendar, as an XPM2 image drawn inline. |
+| `config.py` | The TOML config, its models and where it is found; each option's description lives here. |
+| `connect.py` | What every command shares: the bar client, the sources, stopping on a signal. |
+| `diagnose.py` | `check` and `status`, as text or JSON. |
+| `playback.py` | Showing events outside the schedule: `replay`, the demo, the gallery's test frame. |
+| `wizard.py` | `init` and `add`: the questions, the secrets, the config they write. |
+| `service.py` | `install`, `uninstall`, the service's state and log: launchd or systemd. |
+| `reference.py` | Generates the configuration reference from `config.py`. |
+| `cli.py` | The command line: the commands, their options, which code each runs. |
 
 ## Rules
 

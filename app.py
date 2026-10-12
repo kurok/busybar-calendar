@@ -43,7 +43,7 @@ from pathlib import Path
 # The app's code lives in src/busybar_calendar, next to this file.
 sys.path.insert(0, str(Path(__file__).resolve().parent / "src"))
 
-from busybar_calendar import cli
+from busybar_calendar import cli, playback
 from busybar_calendar.config import Config, ConfigError, find, load
 
 APP = "busybar-calendar"
@@ -146,7 +146,7 @@ def main(argv: list[str] | None = None) -> int:
         path = config_file(args)
         config = build_config(args, path)
         if args.test:
-            return asyncio.run(cli.draw_test_frame(config))
+            return asyncio.run(playback.draw_test_frame(config))
         if args.demo or not config.sources:
             if not args.demo:
                 print(
@@ -154,7 +154,7 @@ def main(argv: list[str] | None = None) -> int:
                     "init`): playing a demo schedule.",
                     file=sys.stderr,
                 )
-            return asyncio.run(cli.run_demo(config))
+            return asyncio.run(playback.run_demo(config))
         where = config.bar.address or "BUSY Cloud"
         print(
             f"{APP} -> {where}{f', config {path}' if path else ''}  (Ctrl-C to stop)",

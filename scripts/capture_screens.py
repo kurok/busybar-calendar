@@ -21,8 +21,8 @@ from pathlib import Path
 from PIL import Image, ImageDraw
 
 from busybar_calendar import render
-from busybar_calendar.cli import _bar
 from busybar_calendar.config import DisplayConfig, ReminderSettings, StatusSettings, load
+from busybar_calendar.connect import make_bar
 from busybar_calendar.events import CalendarRef, Event
 from busybar_calendar.schedule import Screen
 
@@ -80,7 +80,7 @@ async def main() -> None:
     config = load(args.config)
     app = config.bar.application_name
     args.out.mkdir(parents=True, exist_ok=True)
-    bar = _bar(config)
+    bar = make_bar(config)
     try:
         for name, screen, display, count in scenarios(datetime.now(UTC)):
             if args.only and name not in args.only:

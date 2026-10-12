@@ -210,8 +210,8 @@ async def test_a_source_configured_wrong_stops_the_service():
 
 
 async def test_play_carries_on_when_the_bar_refuses_a_draw(monkeypatch):
-    from busybar_calendar import cli
-    from busybar_calendar.cli import play
+    from busybar_calendar import playback as cli
+    from busybar_calendar.playback import play
 
     async def no_wait(stop, moment):
         return False
