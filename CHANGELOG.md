@@ -6,6 +6,8 @@ All notable changes to busybar-calendar. The format follows
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-10-12
+
 ### Added
 
 - `status` checks the bar with one light read-only call and says whether it
@@ -133,7 +135,8 @@ Found on a bar running firmware 1.2.4, and recorded in
 - A refused draw (409) stopped the demo and replay.
 - A Ctrl-C during the slow first start printed a traceback.
 
-[Unreleased]: https://github.com/kurok/busybar-calendar/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/kurok/busybar-calendar/compare/v0.3.1...HEAD
+[0.3.1]: https://github.com/kurok/busybar-calendar/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/kurok/busybar-calendar/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/kurok/busybar-calendar/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/kurok/busybar-calendar/releases/tag/v0.1.0
