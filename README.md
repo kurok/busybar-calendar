@@ -86,10 +86,13 @@ from the calendar stops the app with an error rather than retrying forever.
 git clone https://github.com/kurok/busybar-calendar.git
 cd busybar-calendar
 uv tool install .                         # puts busybar-calendar on your PATH
-cp config.example.toml config.toml        # then edit it
+mkdir -p ~/.config/busybar-calendar
+cp config.example.toml ~/.config/busybar-calendar/config.toml   # then edit it
 ```
 
-A minimal `config.toml`:
+The config is found on its own in `~/.config/busybar-calendar/config.toml`
+(or `./config.toml`, or wherever `$BUSYBAR_CALENDAR_CONFIG` or `-c` points).
+A minimal one:
 
 ```toml
 [bar]
@@ -107,7 +110,8 @@ password_command = ["security", "find-generic-password", "-s", "busybar-icloud",
 Then:
 
 ```sh
-busybar-calendar calendars   # the calendars each CalDAV account has
+busybar-calendar check       # the bar, its token and every calendar, in one go
+busybar-calendar calendars   # the calendars each CalDAV account has, with ids
 busybar-calendar upcoming    # what the bar will show, and when
 busybar-calendar demo        # draw a sample reminder for 20 seconds
 busybar-calendar replay      # play tomorrow's events on the bar, a minute each

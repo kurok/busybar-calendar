@@ -10,10 +10,12 @@ import json
 import logging
 import signal
 import sys
+from collections.abc import Callable
 from datetime import UTC, date, datetime, time, timedelta, tzinfo
 from zoneinfo import ZoneInfo
 
 from busylib.client import AsyncBusyBar
+from busylib.exceptions import BusyBarAPIError
 
 from . import config as config_module
 from . import render, schedule, sources
@@ -83,6 +85,109 @@ async def run_service(config: Config) -> int:
 
 async def cmd_run(config: Config, _args: argparse.Namespace) -> int:
     return await run_service(config)
+
+
+LAN_TOKEN_LIMIT = 32  # the firmware refuses longer X-API-Token values
+
+
+async def _check_bar(config: Config, report: Callable[[bool, str], None]) -> None:
+    where = config.bar.address or "BUSY Cloud"
+    bar = _bar(config)
+    try:
+        try:
+            version = await bar.version()
+        except Exception as error:
+            report(False, f"{where}: unreachable ({error})")
+            return
+        try:
+            firmware = await bar.status_firmware()
+        except BusyBarAPIError as error:
+            report(
+                False,
+                f"{where}: {error.status_code} on an authenticated call. "
+                f"{await _access_hint(bar, config, error)}",
+            )
+            return
+        report(
+            True, f"{where}: firmware {firmware.version}, API {version.api_semver}, token accepted"
+        )
+    finally:
+        await bar.aclose()
+
+
+async def _access_hint(bar: AsyncBusyBar, config: Config, error: BusyBarAPIError) -> str:
+    """Why an authenticated call was refused, in the words of the fix."""
+    if not config.bar.address:
+        return "The cloud token is wrong, revoked, or lacks the BUSY Bar access scope."
+    try:
+        access = await bar.access()  # answered without a token
+    except Exception:
+        access = None
+    if access is not None and access.mode == "disabled":
+        return (
+            "The bar's HTTP API over Wi-Fi is disabled: enable it at http://10.0.4.20 "
+            "(USB) -> Network -> HTTP API, or use a BUSY Cloud token without an address."
+        )
+    token = config.bar.token.resolve()
+    if not token:
+        return "The bar wants its HTTP API password: set bar.token / token_env / token_command."
+    if len(token) > LAN_TOKEN_LIMIT:
+        return (
+            f"The token is {len(token)} characters; the bar takes at most "
+            f"{LAN_TOKEN_LIMIT}. Is it a cloud token? Then leave bar.address out."
+        )
+    return "The bar did not accept the password."
+
+
+async def _check_source(item: sources.Source, report: Callable[[bool, str], None], tz) -> None:
+    now = datetime.now(UTC)
+    try:
+        if isinstance(item, sources.CalDAVSource):
+            found = await item.calendars()
+            used, unmatched = sources.select(found, item.config.include, item.config.exclude)
+            names = ", ".join(c.name for c in used) or "none"
+            report(
+                bool(used),
+                f"{item.name}: signed in; {len(used)} of {len(found)} calendars used: {names}",
+            )
+            for pattern in unmatched:
+                report(False, f"{item.name}: no calendar matches {pattern!r}")
+        events = await item.fetch(now - timedelta(hours=24), now + timedelta(days=7))
+    except Exception as error:
+        report(False, f"{item.name}: {error}")
+        return
+    ahead = sorted((e for e in events if e.end > now), key=lambda e: e.start)
+    if not ahead:
+        report(True, f"{item.name}: no events in the next 7 days")
+        return
+    first = ahead[0]
+    report(
+        True,
+        f"{item.name}: {len(ahead)} events in the next 7 days; next "
+        f"{first.start.astimezone(tz):%a %d %b %H:%M} {first.title}",
+    )
+
+
+async def cmd_check(config: Config, _args: argparse.Namespace) -> int:
+    """Check the setup end to end: the bar, its token, every calendar."""
+    problems = 0
+
+    def report(good: bool, text: str) -> None:
+        nonlocal problems
+        problems += not good
+        print(f"  {'ok ' if good else 'FAIL'} {text}")
+
+    print("Bar")
+    await _check_bar(config, report)
+    print("Calendars")
+    items = _sources(config)
+    try:
+        for item in items:
+            await _check_source(item, report, _floating_tz(config))
+    finally:
+        await _close(items)
+    print("\nAll good." if not problems else f"\n{problems} problem(s) above.")
+    return 0 if not problems else 1
 
 
 async def cmd_calendars(config: Config, _args: argparse.Namespace) -> int:
@@ -330,14 +435,25 @@ def setup_logging(verbose: bool) -> None:
     # Its bounds check ignores anchors, so a bottom-anchored line at y=16 -
     # busylib's own calibrated two-line layout - is reported as off-screen.
     logging.getLogger("busylib.client.display").setLevel(logging.ERROR)
+    # "Device API minor version is behind Busy Lib": busylib's own nag, on every
+    # bar that runs released firmware; `check` prints both versions instead.
+    logging.getLogger("busylib.client.firmware").setLevel(logging.ERROR)
+    # It logs every refused call; this service reports those itself, with what to do.
+    logging.getLogger("busylib.client.base").setLevel(logging.CRITICAL)
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="busybar-calendar", description=__doc__)
-    parser.add_argument("-c", "--config", default="config.toml", help="TOML configuration")
+    parser.add_argument(
+        "-c",
+        "--config",
+        help="TOML configuration (default: $BUSYBAR_CALENDAR_CONFIG, ./config.toml, "
+        "then ~/.config/busybar-calendar/config.toml)",
+    )
     parser.add_argument("-v", "--verbose", action="store_true")
     commands = parser.add_subparsers(dest="command", required=True)
     commands.add_parser("run", help="keep the bar in step with the calendars")
+    commands.add_parser("check", help="check the bar, its token and every calendar")
     commands.add_parser("calendars", help="list the calendars each CalDAV source has")
     upcoming = commands.add_parser("upcoming", help="list the events the bar will show")
     upcoming.add_argument("--hours", type=int, default=24)
@@ -361,13 +477,14 @@ def main(argv: list[str] | None = None) -> int:
 
     handlers = {
         "run": cmd_run,
+        "check": cmd_check,
         "calendars": cmd_calendars,
         "upcoming": cmd_upcoming,
         "demo": cmd_demo,
         "replay": cmd_replay,
     }
     try:
-        config = config_module.load(args.config)
+        config = config_module.load(config_module.find(args.config))
         return asyncio.run(handlers[args.command](config, args))
     except (ConfigError, CalDAVError, sources.FatalSourceError, OSError, ValueError) as error:
         print(f"busybar-calendar: {error}", file=sys.stderr)

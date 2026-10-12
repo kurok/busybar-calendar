@@ -253,6 +253,31 @@ class ConfigError(Exception):
     pass
 
 
+CONFIG_ENV = "BUSYBAR_CALENDAR_CONFIG"
+
+
+def search_paths() -> list[Path]:
+    """Where a config is looked for when none is named: here, then the user's config dir."""
+    config_home = Path(os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config")
+    return [Path("config.toml"), config_home / "busybar-calendar" / "config.toml"]
+
+
+def find(explicit: str | Path | None = None) -> Path:
+    """The config file: the one named, else $BUSYBAR_CALENDAR_CONFIG, else the first that exists."""
+    if explicit:
+        return Path(explicit)
+    if os.environ.get(CONFIG_ENV):
+        return Path(os.environ[CONFIG_ENV])
+    for path in search_paths():
+        if path.is_file():
+            return path
+    tried = ", ".join(str(path) for path in search_paths())
+    raise ConfigError(
+        f"no config found (tried {tried}): copy config.example.toml to one of them, "
+        f"or name one with -c or ${CONFIG_ENV}"
+    )
+
+
 def load(path: str | Path) -> Config:
     with open(path, "rb") as handle:
         data = tomllib.load(handle)

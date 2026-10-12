@@ -189,6 +189,26 @@ it, since it names your accounts.
 ## Check it
 
 ```sh
+busybar-calendar check
+```
+
+checks the whole setup and says what to fix:
+
+```
+Bar
+  ok   BUSY Cloud: firmware 1.2.4, API 27.5.0, token accepted
+Calendars
+  ok   iCloud: signed in; 2 of 5 calendars used: Home, Work
+  ok   iCloud: 23 events in the next 7 days; next Tue 13 Oct 09:00 Standup
+
+All good.
+```
+
+A refused bar call comes with its cause: the Wi-Fi HTTP API switched off,
+a missing password, or a cloud token given as a LAN password. The other
+commands look closer:
+
+```sh
 busybar-calendar calendars                 # discovery: calendars per CalDAV source
 busybar-calendar upcoming --hours 48       # events, settings, your response, what is on now
 busybar-calendar demo                      # a sample reminder for 20 seconds
@@ -214,7 +234,6 @@ busybar-calendar -v run                    # run in the foreground with debug lo
   <key>ProgramArguments</key>
   <array>
     <string>/Users/me/.local/bin/busybar-calendar</string>
-    <string>--config</string><string>/Users/me/.config/busybar-calendar/config.toml</string>
     <string>run</string>
   </array>
   <key>RunAtLoad</key><true/>
@@ -241,7 +260,7 @@ Description=BUSY Bar calendar reminders
 After=network-online.target
 
 [Service]
-ExecStart=%h/.local/bin/busybar-calendar --config %h/.config/busybar-calendar/config.toml run
+ExecStart=%h/.local/bin/busybar-calendar run
 Restart=on-failure
 
 [Install]
@@ -268,9 +287,9 @@ not there.
 
 | Symptom | Cause |
 | --- | --- |
-| `403` from the bar on the LAN | The Wi-Fi HTTP API is disabled (`/api/access` says so), the password is wrong, or it is longer than 32 characters. |
+| `403` from the bar on the LAN | The Wi-Fi HTTP API is disabled (`/api/access` says so), the password is wrong, or it is longer than 32 characters. `busybar-calendar check` tells which. |
 | `401` from the bar via the cloud | The token is not a BUSY Bar-scope token, or it was revoked. |
-| `check the credentials` from CalDAV | Wrong username or password. iCloud and Fastmail need an app password. |
+| `check the credentials` from CalDAV | Wrong username or password. iCloud and Fastmail need an app password. The service stops on it rather than retrying. |
 | `no current-user-principal` | The server has no discovery at that URL: give a calendar's URL instead. |
 | An event never shows | It is all-day or 24 hours or longer, marked free (`skip_free`), cancelled, or declined. `upcoming` lists only what will show. |
 | `409` in the log | Something above `bar.priority` (default 91) is on screen; it is retried. |
