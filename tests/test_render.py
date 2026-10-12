@@ -30,10 +30,11 @@ def test_title_text():
 
 
 def test_reminder_two_lines():
-    d = drawing(screen(), DisplayConfig(), "busybar_calendar", 91)
-    assert (d.application_name, d.priority) == ("busybar_calendar", 91)
+    d = drawing(screen(), DisplayConfig(), "busybar-calendar", 91)
+    assert (d.application_name, d.priority) == ("busybar-calendar", 91)
     elements = by_id(d)
-    assert elements["cal_icon"].stock_path == "shared/animations/calendar_reminder_16x16.anim"
+    assert elements["cal_xpm"].data == icons.RED_CALENDAR
+    assert "cal_busy" not in elements  # BUSY is for the event itself, not before it
     title = elements["cal_title"]
     assert title.text == "Planuvannya sprintu"
     assert (title.font, title.align, title.x, title.y) == ("small", "top_left", 18, 0)
@@ -88,13 +89,12 @@ def test_status_has_the_red_calendar_and_busy():
 
 
 def test_icons_and_label_follow_the_config():
-    display = DisplayConfig(event_icon="animation", busy_label="", reminder_icon="red_calendar")
+    display = DisplayConfig(event_icon="animation", busy_label="", reminder_icon="animation")
     status = by_id(drawing(screen("status"), display, "a", 91))
     assert list(status) == ["cal_icon", "cal_title", "cal_time"]
     assert status["cal_icon"].stock_path == "shared/animations/calendar_event_16x16.anim"
     reminder = by_id(drawing(screen(), display, "a", 91))
-    assert "cal_xpm" in reminder
-    assert "cal_busy" not in reminder  # BUSY is for the event itself, not before it
+    assert reminder["cal_icon"].stock_path == "shared/animations/calendar_reminder_16x16.anim"
     custom = by_id(
         drawing(screen("status"), DisplayConfig(busy_label="IN MTG", busy_color="#FF8800"), "a", 91)
     )

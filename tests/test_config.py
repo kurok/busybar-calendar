@@ -116,3 +116,16 @@ def test_tentative_status_can_be_turned_off():
     config = Config.model_validate(base(status={"tentative": False}))
     _, status = config.settings_for("Work", "Work")
     assert status.tentative is False
+
+
+def test_a_config_file_needs_a_source(tmp_path):
+    path = tmp_path / "c.toml"
+    path.write_text('[bar]\naddress = "10.0.4.20"\n')
+    with pytest.raises(ConfigError, match="no"):
+        load(path)
+
+
+def test_events_of_no_source_get_the_defaults():
+    config = Config.model_validate({"defaults": {"reminder": {"minutes_before": 2}}})
+    reminder, status = config.settings_for("demo", "demo")
+    assert (reminder.minutes_before, status.show) == (2, "name")

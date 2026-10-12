@@ -5,8 +5,10 @@ The loop sleeps until the next moment the screen can change - a reminder
 opening, an event starting or ending - or the next refresh, whichever is
 first, so a reminder appears on the second rather than on the next poll.
 
-A source that fails keeps its last good events, so a calendar server
-hiccup does not take a running meeting off the bar. A bar that refuses a
+A source that fails for a while keeps its last good events, so a calendar
+server hiccup does not take a running meeting off the bar. One that answers
+401, 403 or 404 is configured wrong, and the loop stops and says so rather
+than retrying it forever. A bar that refuses a
 drawing (unreachable, or something above our priority on screen) is tried
 again shortly.
 """
@@ -26,7 +28,7 @@ from busylib.exceptions import BusyBarAPIError
 from . import render, schedule
 from .config import Config, ReminderSettings, StatusSettings
 from .events import Event
-from .sources import Source
+from .sources import FatalSourceError, Source
 
 logger = logging.getLogger(__name__)
 
@@ -91,6 +93,9 @@ class Runner:
         results = await asyncio.gather(
             *(source.fetch(start, end) for source in self.sources), return_exceptions=True
         )
+        for result in results:
+            if isinstance(result, FatalSourceError):
+                raise result  # wrong credentials or URL: say so and stop
         for source, result in zip(self.sources, results, strict=True):
             if isinstance(result, BaseException):
                 kept = len(self._events.get(source.name, []))

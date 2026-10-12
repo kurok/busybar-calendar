@@ -136,3 +136,35 @@ async def test_source_fetches_only_selected_calendars_with_ids():
     # Listed last, so it outranks Infra Maintenances when both start together.
     assert by_title["mine"].order > by_title["sre"].order
     await source.aclose()
+
+
+class FailingClient(FakeClient):
+    def __init__(self, error):
+        super().__init__([], {})
+        self.error = error
+
+    async def discover(self):
+        raise self.error
+
+
+async def test_wrong_url_or_password_is_fatal_but_a_server_error_is_not():
+    import pytest
+
+    from busybar_calendar.caldav import CalDAVAuthError, CalDAVError
+    from busybar_calendar.sources import FatalSourceError
+
+    config = Config.model_validate(
+        {"sources": [{"name": "M", "type": "caldav", "url": "https://x"}]}
+    )
+    start = datetime(2026, 10, 13, tzinfo=UTC)
+    for error, fatal in (
+        (CalDAVAuthError("401", 401), True),
+        (CalDAVError("404", 404), True),
+        (CalDAVError("no current-user-principal"), True),
+        (CalDAVError("503", 503), False),
+    ):
+        source = CalDAVSource(config.sources[0], 0, ZoneInfo("UTC"), True)
+        source._client = FailingClient(error)
+        with pytest.raises(FatalSourceError if fatal else CalDAVError):
+            await source.fetch(start, start + timedelta(hours=1))
+        await source.aclose()

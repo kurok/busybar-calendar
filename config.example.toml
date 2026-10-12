@@ -27,7 +27,7 @@ token_env = "BUSYBAR_TOKEN"
 # transliterate = true
 # The icon beside the title: "red_calendar" or the bar's own "animation".
 # event_icon = "red_calendar"
-# reminder_icon = "animation"
+# reminder_icon = "red_calendar"
 # A word beside the countdown while an event is on ("" for none).
 # busy_label = "BUSY"
 # busy_color = "#FF0000"

@@ -126,7 +126,8 @@ class BarConfig(_Strict):
     token: Secret = Field(default_factory=Secret)
     # Above an active BUSY session (90), like the Google integration's events.
     priority: int = Field(default=91, ge=1, le=100)
-    application_name: str = Field(default="busybar_calendar", max_length=32)
+    # Also the app's id in the community gallery, which must match its folder.
+    application_name: str = Field(default="busybar-calendar", max_length=32)
 
     @model_validator(mode="before")
     @classmethod
@@ -144,7 +145,7 @@ class DisplayConfig(_Strict):
     event_sound: str = "shared/sounds/calendar_event_starts.snd"
     # The icon beside the title: the bar's own calendar animations, or a red
     # calendar drawn inline.
-    reminder_icon: Literal["animation", "red_calendar"] = "animation"
+    reminder_icon: Literal["animation", "red_calendar"] = "red_calendar"
     event_icon: Literal["animation", "red_calendar"] = "red_calendar"
     # A word beside the countdown while an event is on; "" for none. Not
     # drawn with the global font, whose one line has no room for it.
@@ -218,7 +219,8 @@ class Config(_Strict):
     sync: SyncConfig = Field(default_factory=SyncConfig)
     display: DisplayConfig = Field(default_factory=DisplayConfig)
     defaults: Overrides = Field(default_factory=Overrides)
-    sources: list[SourceConfig] = Field(min_length=1)
+    # Empty only for the gallery app's --demo and --test, which need no calendar.
+    sources: list[SourceConfig] = Field(default_factory=list)
 
     @model_validator(mode="after")
     def _unique_names(self) -> Config:
@@ -234,9 +236,11 @@ class Config(_Strict):
         The effective settings of one calendar: defaults, then the source, then
         the calendar's overrides by name, then by id.
         """
-        src = next(s for s in self.sources if s.name == source)
-        layers: list[Overrides] = [self.defaults, src]
-        layers += [src.calendars[key] for key in (calendar, calendar_id) if key in src.calendars]
+        layers: list[Overrides] = [self.defaults]
+        src = next((s for s in self.sources if s.name == source), None)
+        if src is not None:  # an event of no configured source (a demo) gets the defaults
+            layers.append(src)
+            layers += [src.calendars[k] for k in (calendar, calendar_id) if k in src.calendars]
         reminder: dict[str, Any] = {}
         status: dict[str, Any] = {}
         for layer in layers:
@@ -253,6 +257,8 @@ def load(path: str | Path) -> Config:
     with open(path, "rb") as handle:
         data = tomllib.load(handle)
     config = Config.model_validate(data)
+    if not config.sources:
+        raise ConfigError(f"{path}: no [[sources]]: add a CalDAV account or an ICS feed")
     # Validate every calendar's settings up front rather than at the first event.
     for source in config.sources:
         for calendar in [source.name, *source.calendars]:

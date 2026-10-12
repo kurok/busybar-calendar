@@ -55,20 +55,34 @@ async def _close(items: list[sources.Source]) -> None:
         await item.aclose()
 
 
-async def cmd_run(config: Config, _args: argparse.Namespace) -> int:
-    items = _sources(config)
-    bar = _bar(config)
+def _stop_on_signals() -> asyncio.Event:
+    """An event that SIGINT or SIGTERM sets, so every mode can stop cleanly."""
     stop = asyncio.Event()
     loop = asyncio.get_running_loop()
     for sig in (signal.SIGINT, signal.SIGTERM):
         with contextlib.suppress(NotImplementedError):
             loop.add_signal_handler(sig, stop.set)
+    return stop
+
+
+async def run_service(config: Config) -> int:
+    """Keep the bar in step with the calendars until a signal, or a source that cannot work."""
+    items = _sources(config)
+    bar = _bar(config)
+    stop = _stop_on_signals()
     try:
         await Runner(config, bar, items).run(stop)
+    except sources.FatalSourceError as error:
+        print(f"busybar-calendar: {error}", file=sys.stderr)
+        return 1
     finally:
         await _close(items)
         await bar.aclose()
     return 0
+
+
+async def cmd_run(config: Config, _args: argparse.Namespace) -> int:
+    return await run_service(config)
 
 
 async def cmd_calendars(config: Config, _args: argparse.Namespace) -> int:
@@ -130,18 +144,70 @@ def _day(text: str, tz: tzinfo) -> date:
     return named.get(text) or date.fromisoformat(text)
 
 
-async def _sleep_until(moment: datetime) -> None:
-    await asyncio.sleep(max(0.0, (moment - datetime.now(UTC)).total_seconds()))
+async def _wait(stop: asyncio.Event, moment: datetime) -> bool:
+    """Sleep until `moment`; True if `stop` was set first."""
+    delay = max(0.0, (moment - datetime.now(UTC)).total_seconds())
+    with contextlib.suppress(TimeoutError):
+        await asyncio.wait_for(stop.wait(), delay)
+    return stop.is_set()
+
+
+async def _show(runner: Runner, screen: schedule.Screen | None, *, chime: bool) -> None:
+    """Draw (or, with no screen, clear) and carry on if the bar refuses: a 409 means
+    something above our priority holds the screen - a menu, a button press."""
+    try:
+        if screen is None:
+            await runner.clear()
+        else:
+            await runner.show(screen, chime=chime)
+    except Exception as error:
+        logger.warning("bar refused the update (%s); carrying on", error)
+
+
+async def play(
+    runner: Runner,
+    events: list[Event],
+    seconds: int,
+    stop: asyncio.Event,
+    *,
+    chime: bool,
+    tz: tzinfo | None = None,
+) -> None:
+    """
+    Show events one after another, each in a slot of `seconds`.
+
+    A third of the slot is the reminder, counting down to a start moved to
+    its end; the rest is the status. Titles, settings and drawings are the
+    events' own; only the times are not.
+    """
+    reminder_part = timedelta(seconds=max(5, seconds // 3))
+    status_part = timedelta(seconds=seconds) - reminder_part
+    for number, event in enumerate(events, 1):
+        reminder, status = runner.settings_for(event)
+        start = datetime.now(UTC).replace(microsecond=0) + reminder_part
+        moved = dataclasses.replace(event, start=start, end=start + status_part)
+        if tz is not None:
+            print(
+                f"{number:>2}/{len(events)}  {event.start.astimezone(tz):%H:%M}-"
+                f"{event.end.astimezone(tz):%H:%M}  {event.title}  [{event.response}]",
+                flush=True,
+            )
+        if reminder.enabled:
+            await _show(runner, schedule.Screen("reminder", moved, reminder, status), chime=chime)
+        if await _wait(stop, moved.start):
+            return
+        shown = schedule.shows_status(moved, status)
+        await _show(
+            runner,
+            schedule.Screen("status", moved, reminder, status) if shown else None,
+            chime=chime,
+        )
+        if await _wait(stop, moved.end):
+            return
 
 
 async def cmd_replay(config: Config, args: argparse.Namespace) -> int:
-    """
-    Play a day's real events on the bar, one after another, in short slots.
-
-    Each event gets `--seconds`: a third as its reminder, counting down to a
-    start moved to the end of that third, the rest as its status. Titles,
-    settings, sounds and drawings are the real ones; only the times are not.
-    """
+    """Play a day's real events on the bar, one after another, in short slots."""
     tz = _floating_tz(config)
     day = _day(args.day, tz)
     day_start = datetime.combine(day, time.min, tzinfo=tz)
@@ -158,35 +224,62 @@ async def cmd_replay(config: Config, args: argparse.Namespace) -> int:
     if not events:
         print(f"No events on {day:%a %d %b}.")
         return 0
-
-    reminder_part = timedelta(seconds=max(5, args.seconds // 3))
-    status_part = timedelta(seconds=args.seconds) - reminder_part
     print(f"Replaying {len(events)} events of {day:%a %d %b}, {args.seconds}s each.")
     bar = _bar(config)
     runner = Runner(config, bar, [])
+    stop = _stop_on_signals()
     try:
-        for number, event in enumerate(events, 1):
-            reminder, status = runner.settings_for(event)
-            start = datetime.now(UTC).replace(microsecond=0) + reminder_part
-            moved = dataclasses.replace(event, start=start, end=start + status_part)
-            print(
-                f"{number:>2}/{len(events)}  {event.start.astimezone(tz):%H:%M}-"
-                f"{event.end.astimezone(tz):%H:%M}  {event.title}  [{event.response}]",
-                flush=True,
-            )
-            if reminder.enabled:
-                screen = schedule.Screen("reminder", moved, reminder, status)
-                await runner.show(screen, chime=not args.quiet)
-            await _sleep_until(moved.start)
-            if schedule.shows_status(moved, status):
-                screen = schedule.Screen("status", moved, reminder, status)
-                await runner.show(screen, chime=not args.quiet)
-            else:
-                await runner.clear()
-            await _sleep_until(moved.end)
+        await play(runner, events, args.seconds, stop, chime=not args.quiet, tz=tz)
     finally:
         with contextlib.suppress(Exception):
             await runner.clear()
+        await bar.aclose()
+    return 0
+
+
+DEMO_EVENTS = (
+    ("Design review", "accepted"),
+    ("1:1 with Alex", "accepted"),
+    ("Quarterly planning with the design team", "tentative"),
+)
+
+
+def _demo_events() -> list[Event]:
+    ref = CalendarRef("demo", "demo", 0)
+    now = datetime.now(UTC)
+    return [
+        Event(f"demo-{i}", title, now, now + timedelta(minutes=30), ref, response)
+        for i, (title, response) in enumerate(DEMO_EVENTS)
+    ]
+
+
+async def run_demo(config: Config, seconds: int = 20) -> int:
+    """Loop a made-up schedule on the bar until a signal: reminders, then BUSY."""
+    bar = _bar(config)
+    runner = Runner(config, bar, [])
+    stop = _stop_on_signals()
+    try:
+        while not stop.is_set():
+            await play(runner, _demo_events(), seconds, stop, chime=False)
+    finally:
+        with contextlib.suppress(Exception):
+            await runner.clear()
+        await bar.aclose()
+    return 0
+
+
+async def draw_test_frame(config: Config) -> int:
+    """Draw one made-up event in progress - the red calendar and BUSY - and exit."""
+    event = dataclasses.replace(_demo_events()[0], start=datetime.now(UTC) - timedelta(minutes=2))
+    reminder, status = config.settings_for("demo", "demo")
+    screen = schedule.Screen("status", event, reminder, status)
+    bar = _bar(config)
+    try:
+        drawing = render.drawing(
+            screen, config.display, config.bar.application_name, config.bar.priority
+        )
+        await render.send(bar, drawing)
+    finally:
         await bar.aclose()
     return 0
 
@@ -225,6 +318,20 @@ async def cmd_demo(config: Config, args: argparse.Namespace) -> int:
     return 0
 
 
+def setup_logging(verbose: bool) -> None:
+    logging.basicConfig(
+        level=logging.DEBUG if verbose else logging.INFO,
+        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+    )
+    if not verbose:
+        logging.getLogger("busylib").setLevel(logging.WARNING)
+        logging.getLogger("httpx").setLevel(logging.WARNING)
+        logging.getLogger("httpx2").setLevel(logging.WARNING)
+    # Its bounds check ignores anchors, so a bottom-anchored line at y=16 -
+    # busylib's own calibrated two-line layout - is reported as off-screen.
+    logging.getLogger("busylib.client.display").setLevel(logging.ERROR)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="busybar-calendar", description=__doc__)
     parser.add_argument("-c", "--config", default="config.toml", help="TOML configuration")
@@ -250,16 +357,7 @@ def main(argv: list[str] | None = None) -> int:
     replay.add_argument("--quiet", action="store_true", help="no sounds")
     args = parser.parse_args(argv)
 
-    logging.basicConfig(
-        level=logging.DEBUG if args.verbose else logging.INFO,
-        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
-    )
-    if not args.verbose:
-        logging.getLogger("busylib").setLevel(logging.WARNING)
-        logging.getLogger("httpx").setLevel(logging.WARNING)
-    # Its bounds check ignores anchors, so a bottom-anchored line at y=16 -
-    # busylib's own calibrated two-line layout - is reported as off-screen.
-    logging.getLogger("busylib.client.display").setLevel(logging.ERROR)
+    setup_logging(args.verbose)
 
     handlers = {
         "run": cmd_run,
@@ -271,7 +369,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         config = config_module.load(args.config)
         return asyncio.run(handlers[args.command](config, args))
-    except (ConfigError, CalDAVError, OSError, ValueError) as error:
+    except (ConfigError, CalDAVError, sources.FatalSourceError, OSError, ValueError) as error:
         print(f"busybar-calendar: {error}", file=sys.stderr)
         return 1
     except KeyboardInterrupt:

@@ -10,9 +10,9 @@ from busybar_calendar.runner import Runner
 T0 = datetime(2026, 10, 13, 9, 0, tzinfo=UTC)
 REF = CalendarRef("Work", "Work", 0)
 CONFIG = Config.model_validate({"sources": [{"name": "Work", "type": "ics", "url": "https://x"}]})
-TITLED = ("draw", ["cal_icon", "cal_title", "cal_time"])  # the reminder
+TITLED = ("draw", ["cal_xpm", "cal_title", "cal_time"])  # the reminder
 BUSY = ("draw", ["cal_xpm", "cal_title", "cal_time", "cal_busy"])  # the status
-CLEAR = ("clear", "busybar_calendar")
+CLEAR = ("clear", "busybar-calendar")
 
 
 class FakeBar:
@@ -79,7 +79,7 @@ async def test_full_life_of_an_event():
         CLEAR,  # whatever an earlier run left behind
         TITLED,
         ("sound", "calendar_reminder_ends.snd"),
-        CLEAR,  # the status has other elements: the red calendar and BUSY
+        CLEAR,  # the status adds an element, BUSY
         BUSY,
         ("sound", "calendar_event_starts.snd"),
         CLEAR,
@@ -89,7 +89,7 @@ async def test_full_life_of_an_event():
 async def test_same_elements_update_in_place():
     config = Config.model_validate(
         {
-            "display": {"event_icon": "animation", "busy_label": ""},
+            "display": {"busy_label": ""},
             "sources": [{"name": "Work", "type": "ics", "url": "https://x"}],
         }
     )
@@ -190,3 +190,46 @@ async def test_run_wakes_on_time_and_clears_on_stop():
     stop.set()
     await task
     assert [c[0] for c in bar.calls] == ["clear", "draw", "sound", "clear"]
+
+
+async def test_a_source_configured_wrong_stops_the_service():
+    from busybar_calendar.sources import FatalSourceError
+
+    runner, _, source = make([meeting()])
+    await runner.refresh(at(0))
+
+    async def wrong_password(start, end):
+        raise FatalSourceError("Work: 401, check the credentials")
+
+    source.fetch = wrong_password
+    try:
+        await runner.refresh(at(1))
+    except FatalSourceError as error:
+        assert "401" in str(error)
+    else:
+        raise AssertionError("a 401 must stop the service, not be retried forever")
+
+
+async def test_play_carries_on_when_the_bar_refuses_a_draw(monkeypatch):
+    from busybar_calendar import cli
+    from busybar_calendar.cli import play
+
+    async def no_wait(stop, moment):
+        return False
+
+    monkeypatch.setattr(cli, "_wait", no_wait)
+
+    class Busy409Bar(FakeBar):
+        async def api_request(self, method, path, json_payload=None, **kwargs):
+            title = next(e["text"] for e in json_payload["elements"] if e["id"] == "cal_title")
+            if title == "Second":
+                raise BusyBarAPIError("Not drawn due to low priority", status_code=409)
+            return await super().api_request(method, path, json_payload=json_payload, **kwargs)
+
+    bar = Busy409Bar()
+    runner = Runner(CONFIG, bar, [])
+    events = [meeting(title="First"), meeting(title="Second"), meeting(title="Third")]
+    await play(runner, events, 1, asyncio.Event(), chime=False)
+    drawn = [c for c in bar.calls if c[0] == "draw"]
+    # Second's two screens were refused; First and Third still played in full.
+    assert len(drawn) == 4

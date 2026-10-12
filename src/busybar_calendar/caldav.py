@@ -63,7 +63,9 @@ MAX_REDIRECTS = 5
 
 
 class CalDAVError(Exception):
-    pass
+    def __init__(self, message: str, status: int | None = None) -> None:
+        super().__init__(message)
+        self.status = status
 
 
 class CalDAVAuthError(CalDAVError):
@@ -116,10 +118,11 @@ class CalDAVClient:
 
     async def _dav(self, method: str, url: str, body: str, depth: str) -> list[_Response]:
         response = await self._send(method, url, body, depth)
-        if response.status_code in (401, 403):
-            raise CalDAVAuthError(f"{method} {url}: {response.status_code}, check the credentials")
-        if response.status_code != 207:
-            raise CalDAVError(f"{method} {url}: expected 207, got {response.status_code}")
+        code = response.status_code
+        if code in (401, 403):
+            raise CalDAVAuthError(f"{method} {url}: {code}, check the credentials", code)
+        if code != 207:
+            raise CalDAVError(f"{method} {url}: expected 207, got {code}", code)
         base = str(response.url)
         root = fromstring(response.content)
         results = []

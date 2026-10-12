@@ -23,7 +23,7 @@ through `GET /api/screen`.
 
 | | |
 | --- | --- |
-| **Before the event** - the bar's calendar-reminder animation, the title, and a countdown to the start. | ![Reminder](docs/images/reminder.gif) |
+| **Before the event** - a red calendar, the title, and a countdown to the start. | ![Reminder](docs/images/reminder.gif) |
 | **During the event** - a red calendar, the title, a countdown to the end and a red **BUSY** ... | ![Status with the event name](docs/images/status.png) |
 | ... or one of the bar's own statuses, such as `meeting`, `on_call` or `dnd`. | ![Meeting status](docs/images/status-meeting.gif) |
 | **Long titles** scroll beside the icon. | ![Scrolling title](docs/images/long-title.gif) |
@@ -60,6 +60,27 @@ back to whatever it was showing.
   or a command such as the macOS Keychain.
 
 ## Quick start
+
+### As a BUSY Bar gallery app
+
+`app.py` follows the [community gallery](https://github.com/maxswinkels/busybar-apps)
+conventions: one entrypoint, `--host` (default `10.0.4.20`, the bar over
+USB), secrets from the environment only.
+
+```sh
+pip install -r requirements.txt
+python app.py                                   # a demo schedule, to see it
+python app.py --host 192.168.1.50 --ics "https://example.com/work.ics"
+CALDAV_PASSWORD=... python app.py --caldav https://caldav.icloud.com --user me@icloud.com --include Work
+BUSYBAR_TOKEN=... python app.py --cloud --ics "https://example.com/work.ics"   # via BUSY Cloud
+python app.py --config config.toml              # every setting
+```
+
+`CALDAV_PASSWORD` is the calendar password and `BUSYBAR_TOKEN` the bar's
+HTTP API password (or, with `--cloud`, a BUSY Cloud token). A 401 or 404
+from the calendar stops the app with an error rather than retrying forever.
+
+### As a service
 
 ```sh
 git clone https://github.com/kurok/busybar-calendar.git

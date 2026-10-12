@@ -73,8 +73,8 @@ until the start, and a **status** runs from the start to the end.
 
 | Element | Reminder | Status (`show = "name"`) | Status (`show = "meeting"` etc.) |
 | --- | --- | --- | --- |
-| `cal_icon` | `shared/animations/calendar_reminder_16x16.anim` (default) | `shared/animations/calendar_event_16x16.anim` with `event_icon = "animation"` | |
-| `cal_xpm` | the red calendar with `reminder_icon = "red_calendar"` | the red calendar (default) | |
+| `cal_xpm` | the red calendar (default) | the red calendar (default) | |
+| `cal_icon` | `shared/animations/calendar_reminder_16x16.anim` with `reminder_icon = "animation"` | `shared/animations/calendar_event_16x16.anim` with `event_icon = "animation"` | |
 | `cal_title` | title, `small` font, scrolls if long | title | |
 | `cal_time` | countdown to the start | countdown to the end | |
 | `cal_busy` | | `BUSY` in red, right-aligned on the countdown's line | |

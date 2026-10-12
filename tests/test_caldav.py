@@ -158,3 +158,9 @@ async def test_auth_failure_is_reported_not_retried_elsewhere():
 async def test_nothing_to_discover():
     with pytest.raises(CalDAVError, match="current-user-principal"):
         await client(FakeServer(), "https://nowhere.example/").discover()
+
+
+async def test_errors_carry_their_status():
+    with pytest.raises(CalDAVAuthError) as caught:
+        await client(FakeServer(status=401), "https://caldav.example/").discover()
+    assert caught.value.status == 401

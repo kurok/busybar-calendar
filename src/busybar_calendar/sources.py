@@ -16,7 +16,7 @@ from fnmatch import fnmatchcase
 import httpx
 
 from . import events
-from .caldav import CalDAVClient, RemoteCalendar
+from .caldav import CalDAVAuthError, CalDAVClient, CalDAVError, RemoteCalendar
 from .config import SourceConfig
 
 logger = logging.getLogger(__name__)
@@ -26,6 +26,15 @@ USER_AGENT = "busybar-calendar"
 MAX_FEED_BYTES = 32 * 1024 * 1024
 # Calendars are listed again after this many refreshes, to pick up new ones.
 REDISCOVER_EVERY = 12
+
+
+# Answers that mean the source is configured wrong - credentials, URL - so
+# asking again will not help; anything else (timeouts, 5xx) is retried.
+FATAL_STATUS = frozenset({401, 403, 404, 405, 410})
+
+
+class FatalSourceError(Exception):
+    """A source that cannot work as configured. The service stops on one."""
 
 
 def matches(calendar: RemoteCalendar, pattern: str) -> bool:
@@ -120,6 +129,10 @@ class ICSSource(Source):
     async def fetch(self, start: datetime, end: datetime) -> list[events.Event]:
         headers = {"If-None-Match": self._etag} if self._etag and self._body else {}
         response = await self._http.get(self.config.url, headers=headers)
+        if response.status_code in FATAL_STATUS:
+            raise FatalSourceError(
+                f"{self.name}: {self.config.url} answered {response.status_code}"
+            )
         if response.status_code != 304:
             response.raise_for_status()
             if len(response.content) > MAX_FEED_BYTES:
@@ -148,7 +161,13 @@ class CalDAVSource(Source):
 
     async def _selected(self) -> list[tuple[int, RemoteCalendar]]:
         if not self._calendars or self._refreshes % REDISCOVER_EVERY == 0:
-            self._calendars = await self.calendars()
+            try:
+                self._calendars = await self.calendars()
+            except CalDAVError as error:
+                # No status: discovery found no calendar where it was pointed.
+                if error.status is None or error.status in FATAL_STATUS:
+                    raise FatalSourceError(f"{self.name}: {error}") from error
+                raise
         self._refreshes += 1
         selected, unmatched = select(self._calendars, self.config.include, self.config.exclude)
         if unmatched != self._unmatched:
@@ -161,7 +180,10 @@ class CalDAVSource(Source):
         selected = await self._selected()
 
         async def one(position: int, calendar: RemoteCalendar) -> list[events.Event]:
-            documents = await self._client.events(calendar, start, end)
+            try:
+                documents = await self._client.events(calendar, start, end)
+            except CalDAVAuthError as error:
+                raise FatalSourceError(f"{self.name}: {error}") from error
             ref = self._ref(calendar.name, position, calendar.id)
             return self._parse(documents, ref, start, end)
 
