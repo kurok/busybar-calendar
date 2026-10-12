@@ -276,6 +276,17 @@ Calendar  now status: Design review, until Tue 13 Oct 17:30 (in 44m)
 
 A stopped service shows its last exit code, with the log lines that explain it.
 
+### Upgrading
+
+```sh
+cd busybar-calendar && git pull
+uv tool install --force .    # the new version, for the command and the service alike
+busybar-calendar restart     # until then the service keeps running the old one
+```
+
+`status` shows which version the service runs (`Service   running 0.2.0, pid
+4321`), and says so when it is not the one just installed.
+
 Both `status` and `check` take `--json`, for scripts, dashboards or a menu-bar
 widget. `check --json` exits non-zero when something fails, like `check`:
 

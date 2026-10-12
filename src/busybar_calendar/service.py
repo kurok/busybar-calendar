@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import os
 import plistlib
+import re
 import subprocess
 import sys
 from dataclasses import dataclass
@@ -243,3 +244,25 @@ def restart(platform: str = sys.platform) -> bool:
     else:
         command = ["systemctl", "--user", "restart", UNIT]
     return subprocess.run(command, capture_output=True, check=False).returncode == 0
+
+
+STARTED = re.compile(r"busybar-calendar (\S+) started")
+
+
+def running_version(state: Status) -> str | None:
+    """The version the service last started as, from its own log; None if unknown."""
+    if state.log is not None:
+        try:
+            text = state.log.read_text(errors="replace")
+        except OSError:
+            return None
+    else:
+        done = subprocess.run(
+            ["journalctl", "--user", "-u", UNIT, "-n", "2000", "--no-pager", "-o", "cat"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        text = done.stdout if done.returncode == 0 else ""
+    found = STARTED.findall(text)
+    return found[-1] if found else None

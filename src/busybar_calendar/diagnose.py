@@ -206,6 +206,7 @@ async def status_data(config: Config | None) -> dict:
             "detail": state.detail or None,
             "log": str(state.log) if state.log and state.log.exists() else None,
             "recent_log": service.recent_log(state),
+            "version": service.running_version(state) if state.running else None,
         },
         "calendar": None,
     }
@@ -234,7 +235,13 @@ def print_status(data: dict) -> None:
     svc = data["service"]
     if svc["running"]:
         pid = f", pid {svc['pid']}" if svc["pid"] else ""
-        print(f"Service   running{pid}")
+        running = svc.get("version")
+        print(f"Service   running{f' {running}' if running else ''}{pid}")
+        if running and running != data["version"]:
+            print(
+                f"          that is {running}, but this is {data['version']}: "
+                "`busybar-calendar restart` runs this one"
+            )
     elif svc["installed"]:
         why = f" ({svc['detail']})" if svc["detail"] else ""
         print(f"Service   stopped{why}; the log says why")

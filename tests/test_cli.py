@@ -209,6 +209,7 @@ async def test_status_as_json(monkeypatch, capsys):
         "detail": "last exit code 1",
         "log": None,
         "recent_log": ["Feed: 401, check the credentials"],
+        "version": None,
     }
     assert data["calendar"]["now"] is None
     nxt = data["calendar"]["next"]
@@ -354,3 +355,31 @@ def test_an_unreachable_server_is_one_line(tmp_path, monkeypatch, capsys):
     assert capsys.readouterr().err.strip() == (
         "busybar-calendar: cannot reach https://dav.invalid/: name or service not known"
     )
+
+
+async def test_status_says_when_the_service_runs_another_version(monkeypatch, capsys, tmp_path):
+    from busybar_calendar import __version__, service
+
+    log = tmp_path / "busybar-calendar.log"
+    log.write_text(
+        "2026-10-01 INFO busybar_calendar: busybar-calendar 0.0.9 started: 1 calendar source(s)\n"
+        "2026-10-12 INFO busybar_calendar: busybar-calendar 0.1.0 started: 1 calendar source(s)\n"
+        "2026-10-12 INFO busybar_calendar.runner: cleared\n"
+    )
+    monkeypatch.setattr(service, "status", lambda: service.Status(True, True, pid=7, log=log))
+    assert service.running_version(service.Status(True, True, log=log)) == "0.1.0"  # the last
+    await diagnose.status(None)
+    out = capsys.readouterr().out
+    assert "Service   running 0.1.0, pid 7" in out
+    assert f"that is 0.1.0, but this is {__version__}" in out and "restart" in out
+
+
+async def test_status_quiet_when_versions_match(monkeypatch, capsys, tmp_path):
+    from busybar_calendar import __version__, service
+
+    log = tmp_path / "busybar-calendar.log"
+    log.write_text(f"x busybar-calendar {__version__} started: 1 calendar source(s)\n")
+    monkeypatch.setattr(service, "status", lambda: service.Status(True, True, pid=7, log=log))
+    await diagnose.status(None)
+    out = capsys.readouterr().out
+    assert f"running {__version__}, pid 7" in out and "but this is" not in out

@@ -16,6 +16,9 @@ All notable changes to busybar-calendar. The format follows
 
 - `busybar-calendar` on its own says where you stand: the first steps before
   there is a config, the status after, instead of a usage error.
+- `status` shows the version the background service runs, read from the line
+  it now logs at start, and says to `restart` when that is not the version
+  installed; the setup guide has an "Upgrading" section.
 - Tentative events in published feeds, which carry no attendees, now count as
   tentative: Outlook's busy status or `STATUS:TENTATIVE` decides there, for
   overlaps and for `status.tentative`.

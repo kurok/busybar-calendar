@@ -29,6 +29,13 @@ async def run_service(config: Config) -> int:
     items = connect.make_sources(config)
     bar = connect.make_bar(config)
     stop = connect.stop_on_signals()
+    # `status` reads this line to tell which version the service runs.
+    logger.info(
+        "busybar-calendar %s started: %d calendar source(s), bar %s",
+        __version__,
+        len(items),
+        config.bar.address or "via BUSY Cloud",
+    )
     try:
         await Runner(config, bar, items).run(stop)
     except sources.FatalSourceError as error:
