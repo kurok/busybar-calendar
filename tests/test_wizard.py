@@ -37,12 +37,12 @@ class FakeStore:
 
 def test_cloud_and_an_icloud_account(tmp_path):
     path = tmp_path / "busybar-calendar" / "config.toml"
-    # cloud (default), CalDAV (default), username, the suggested server, two calendars
+    # cloud (default), CalDAV (default), username, the guessed provider, two calendars
     ask = script("", "", "me@icloud.com", "", "2, 1")
     store = FakeStore()
     assert wizard.run(path, ask=ask, store=store, discover=lambda source: FOUND) == 0
 
-    assert "[https://caldav.icloud.com]" in ask.asked[3]  # suggested from the address
+    assert ask.asked[3] == "Choose 1-5 [1]: "  # iCloud, guessed from the address
     assert stat.S_IMODE(path.stat().st_mode) == 0o600
     config = load(path)
     assert config.bar.address is None
@@ -79,7 +79,7 @@ def test_wifi_without_a_keychain_and_a_failed_sign_in(tmp_path, capsys):
     def refuse(source):
         raise CalDAVAuthError("PROPFIND https://dav.example.com: 401, check the credentials", 401)
 
-    ask = script("2", "192.168.1.50", "1", "me@example.com", "https://dav.example.com")
+    ask = script("2", "192.168.1.50", "1", "me@example.com", "", "https://dav.example.com")
     assert wizard.run(path, ask=ask, store=FakeStore(keychain=False), discover=refuse) == 0
     out = capsys.readouterr().out
     assert "Could not sign in" in out
@@ -92,7 +92,7 @@ def test_wifi_without_a_keychain_and_a_failed_sign_in(tmp_path, capsys):
 
 def test_all_calendars_when_none_are_picked(tmp_path):
     path = tmp_path / "config.toml"
-    ask = script("3", "1", "me@example.com", "https://dav.example.com", "")
+    ask = script("3", "1", "me@example.com", "", "https://dav.example.com", "")
     wizard.run(path, ask=ask, store=FakeStore(), discover=lambda source: FOUND)
     assert load(path).sources[0].include == []
 
@@ -190,3 +190,28 @@ def test_keychain_prompt_is_asked_again_then_gives_up_cleanly(monkeypatch, capsy
     )
     with pytest.raises(ConfigError, match="did not store the password"):
         wizard.SecretStore("darwin").save("svc", "me", "ENV")
+
+
+def caldav_source(tmp_path, *answers):
+    path = tmp_path / "config.toml"
+    ask = script("3", "1", *answers)  # USB, CalDAV, then the answers given
+    wizard.run(path, ask=ask, store=FakeStore(), discover=lambda source: FOUND)
+    return load(path).sources[0], ask
+
+
+def test_providers_fill_in_the_server(tmp_path):
+    source, ask = caldav_source(tmp_path, "me@mydomain.com", "3", "")  # PrivateEmail
+    assert (source.name, source.url) == ("PrivateEmail", "https://dav.privateemail.com")
+    assert ask.asked[3] == "Choose 1-5 [5]: "  # an unknown domain: another server by default
+
+
+def test_nextcloud_needs_only_the_host(tmp_path):
+    source, _ = caldav_source(tmp_path, "me@example.com", "4", "cloud.example.com/", "")
+    assert source.url == "https://cloud.example.com/remote.php/dav"
+    assert source.name == "example.com"
+
+
+def test_fastmail_is_guessed(tmp_path):
+    source, ask = caldav_source(tmp_path, "me@fastmail.com", "", "")
+    assert (source.name, source.url) == ("Fastmail", "https://caldav.fastmail.com")
+    assert ask.asked[3] == "Choose 1-5 [2]: "

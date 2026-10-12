@@ -6,6 +6,12 @@ All notable changes to busybar-calendar. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- `init` and `add` ask for the calendar provider from a list - iCloud,
+  Fastmail, PrivateEmail, Nextcloud or another server - guessed from your
+  address, instead of for the server's URL; Nextcloud needs only its host.
+
 ### Added
 
 - `busybar-calendar` on its own says where you stand: the first steps before

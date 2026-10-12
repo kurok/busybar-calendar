@@ -28,24 +28,58 @@ from .config import Config, ConfigError, SourceConfig, load
 
 Ask = Callable[[str], str]
 USB_HOST = "10.0.4.20"
+
+
 # Servers to suggest by the address's domain; anything else is asked for.
-KNOWN_SERVERS = {
-    "icloud.com": "https://caldav.icloud.com",
-    "me.com": "https://caldav.icloud.com",
-    "mac.com": "https://caldav.icloud.com",
-    "fastmail.com": "https://caldav.fastmail.com",
-    "fastmail.fm": "https://caldav.fastmail.com",
+@dataclass(frozen=True)
+class Provider:
+    label: str
+    url: str = ""  # empty: asked for
+    ask_for: str = ""  # what to ask, when the URL depends on the user's server
+    note: str = ""  # said before the password is asked for
+    domains: tuple[str, ...] = ()  # email domains that suggest it
+
+
+PROVIDERS = (
+    Provider(
+        "iCloud",
+        "https://caldav.icloud.com",
+        note="iCloud needs an app-specific password: account.apple.com -> Sign-In and "
+        "Security -> App-Specific Passwords.",
+        domains=("icloud.com", "me.com", "mac.com"),
+    ),
+    Provider(
+        "Fastmail",
+        "https://caldav.fastmail.com",
+        note="Fastmail needs an app password: Settings -> Privacy & Security.",
+        domains=("fastmail.com", "fastmail.fm"),
+    ),
+    Provider("PrivateEmail", "https://dav.privateemail.com"),
+    Provider("Nextcloud", ask_for="Your Nextcloud's address, e.g. https://cloud.example.com"),
+    Provider("Another server", ask_for="The CalDAV server's URL"),
+)
+NAMES = {
+    "PrivateEmail": "PrivateEmail (Namecheap)",
+    "Nextcloud": "Nextcloud: asks for your server",
+    "Another server": "Another server: Radicale, Baikal, Synology, Zoho, ... asks for its URL",
 }
-SERVER_NAMES = {
-    "https://caldav.icloud.com": "iCloud",
-    "https://caldav.fastmail.com": "Fastmail",
-}
-APP_PASSWORD_NOTE = {
-    "https://caldav.icloud.com": "iCloud needs an app-specific password: account.apple.com "
-    "-> Sign-In and Security -> App-Specific Passwords.",
-    "https://caldav.fastmail.com": "Fastmail needs an app password: Settings -> Privacy & "
-    "Security.",
-}
+
+
+def _server(ask: Ask, domain: str) -> tuple[str, Provider]:
+    """Pick the provider - guessed from the address - and the server URL it implies."""
+    guess = next((n for n, p in enumerate(PROVIDERS, 1) if domain in p.domains), len(PROVIDERS))
+    number = _choose(
+        ask, "Which provider?", [NAMES.get(p.label, p.label) for p in PROVIDERS], guess
+    )
+    provider = PROVIDERS[number - 1]
+    if provider.url:
+        return provider.url, provider
+    answer = _text(ask, provider.ask_for).rstrip("/")
+    if not answer.startswith(("http://", "https://")):
+        answer = "https://" + answer
+    if provider.label == "Nextcloud" and not answer.endswith("/remote.php/dav"):
+        answer += "/remote.php/dav"
+    return answer, provider
 
 
 @dataclass
@@ -190,13 +224,14 @@ def ask_calendar(
 
     username = _text(ask, "Your username, usually the email address")
     domain = username.rpartition("@")[2].lower()
-    url = _text(ask, "The CalDAV server", KNOWN_SERVERS.get(domain, ""))
-    if url in APP_PASSWORD_NOTE:
-        print(APP_PASSWORD_NOTE[url])
+    url, provider = _server(ask, domain)
+    if provider.note:
+        print(provider.note)
     print("The calendar password:")
     # One Keychain entry per account: two accounts on one domain must not share it.
     secret = store.save(f"busybar-calendar-{username}", username, "CALDAV_PASSWORD")
-    name = _unique(SERVER_NAMES.get(url) or domain or "CalDAV", taken)
+    label = provider.label if provider.url else ""  # a fixed provider names the source
+    name = _unique(label or domain or "CalDAV", taken)
     lines = [
         f"name = {json.dumps(name)}",
         'type = "caldav"',
