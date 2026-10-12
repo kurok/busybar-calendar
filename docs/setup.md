@@ -1,5 +1,16 @@
 # Setup
 
+The quick way is three commands:
+
+```sh
+busybar-calendar init      # answers in, config out: the bar, the calendar, the passwords
+busybar-calendar check     # proves it works, or says what to fix
+busybar-calendar install   # runs it in the background from now on
+```
+
+The rest of this page is what those commands do for you, for when you
+want to do it yourself, or need more than one calendar source.
+
 1. [Connect to the bar](#connect-to-the-bar)
 2. [Add your calendars](#add-your-calendars)
 3. [Keep secrets out of files](#keep-secrets-out-of-files)

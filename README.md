@@ -85,14 +85,18 @@ from the calendar stops the app with an error rather than retrying forever.
 ```sh
 git clone https://github.com/kurok/busybar-calendar.git
 cd busybar-calendar
-uv tool install .                         # puts busybar-calendar on your PATH
-mkdir -p ~/.config/busybar-calendar
-cp config.example.toml ~/.config/busybar-calendar/config.toml   # then edit it
+uv tool install .            # puts busybar-calendar on your PATH
+busybar-calendar init        # a few questions: the bar, the calendar; writes the config
+busybar-calendar check       # the bar, its token and every calendar, in one go
+busybar-calendar install     # keep it running in the background (launchd / systemd)
 ```
 
-The config is found on its own in `~/.config/busybar-calendar/config.toml`
-(or `./config.toml`, or wherever `$BUSYBAR_CALENDAR_CONFIG` or `-c` points).
-A minimal one:
+`init` asks how to reach the bar (BUSY Cloud, Wi-Fi or USB) and which
+calendar to read, stores the passwords in the macOS Keychain (or libsecret
+on Linux) with their own prompts, signs in to let you pick calendars, and
+writes `~/.config/busybar-calendar/config.toml`. The config is found there
+on its own (or in `./config.toml`, or wherever `$BUSYBAR_CALENDAR_CONFIG`
+or `-c` points), and you can write it by hand instead. A minimal one:
 
 ```toml
 [bar]
@@ -107,16 +111,14 @@ username = "me@icloud.com"
 password_command = ["security", "find-generic-password", "-s", "busybar-icloud", "-w"]
 ```
 
-Then:
+More to look at:
 
 ```sh
-busybar-calendar check       # the bar, its token and every calendar, in one go
 busybar-calendar calendars   # the calendars each CalDAV account has, with ids
 busybar-calendar upcoming    # what the bar will show, and when
 busybar-calendar demo        # draw a sample reminder for 20 seconds
 busybar-calendar replay      # play tomorrow's events on the bar, a minute each
-busybar-calendar run         # keep the bar in step with your calendars
-busybar-calendar install     # ... in the background from now on (launchd / systemd)
+busybar-calendar run         # keep the bar in step with your calendars, in the foreground
 ```
 
 [docs/setup.md](docs/setup.md) covers connecting the bar (cloud token or LAN

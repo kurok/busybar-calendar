@@ -8,18 +8,20 @@ import contextlib
 import dataclasses
 import json
 import logging
+import os
 import shlex
 import signal
 import sys
 from collections.abc import Callable
 from datetime import UTC, date, datetime, time, timedelta, tzinfo
+from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from busylib.client import AsyncBusyBar
 from busylib.exceptions import BusyBarAPIError
 
 from . import config as config_module
-from . import render, schedule, service, sources
+from . import render, schedule, service, sources, wizard
 from .caldav import CalDAVError
 from .config import Config, ConfigError
 from .events import CalendarRef, Event
@@ -493,6 +495,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("-v", "--verbose", action="store_true")
     commands = parser.add_subparsers(dest="command", required=True)
     commands.add_parser("run", help="keep the bar in step with the calendars")
+    init = commands.add_parser("init", help="answer a few questions to write the config")
+    init.add_argument("--force", action="store_true", help="replace an existing config")
     commands.add_parser("check", help="check the bar, its token and every calendar")
     install = commands.add_parser(
         "install", help="run in the background from now on (launchd / systemd)"
@@ -534,6 +538,13 @@ def main(argv: list[str] | None = None) -> int:
     try:
         if args.command == "uninstall":  # needs no config: there may be none left
             return cmd_uninstall(args)
+        if args.command == "init":  # writes the config
+            path = Path(
+                args.config
+                or os.environ.get(config_module.CONFIG_ENV)
+                or config_module.search_paths()[-1]
+            )
+            return wizard.run(path, overwrite=args.force)
         args.config_path = config_module.find(args.config)
         config = config_module.load(args.config_path)
         return asyncio.run(handlers[args.command](config, args))
