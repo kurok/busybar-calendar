@@ -1,0 +1,74 @@
+# busybar-calendar configuration. Copy to config.toml and fill in.
+
+[bar]
+# LAN address of the bar (Settings -> Wi-Fi -> your network -> View IP Address),
+# or 10.0.4.20 over USB. Leave it out to go through BUSY Cloud instead.
+address = "192.168.1.50"
+# The HTTP API password set on the bar's Network tab (sent as X-API-Token).
+# Without an address, a BUSY Cloud token with the "BUSY Bar" access scope.
+# Give one of: token, token_env, token_command.
+token_env = "BUSYBAR_TOKEN"
+# Above an active BUSY session (90), as Google Calendar events are.
+# priority = 91
+
+[sync]
+# poll_minutes = 5
+# lookahead_hours = 24
+# Events marked "free" do not make you busy.
+# skip_free = true
+# Timezone for event times that carry none. Defaults to this machine's.
+# timezone = "Europe/Kyiv"
+
+[display]
+# "small" fits the title and the countdown on two lines. "global" draws
+# Cyrillic, CJK and accented titles, on one line beside the countdown
+# (experimental: the published API schema allows ASCII only).
+# title_font = "small"
+# transliterate = true
+
+# The settings the Google Calendar integration has per calendar, set once for
+# every calendar here, then overridden per source or per calendar below.
+[defaults.reminder]
+enabled = true
+minutes_before = 5
+sound = true
+show_name = true
+
+[defaults.status]
+enabled = true
+# "name" shows the event's title, or pick a status the bar has:
+# meeting, on_call, on_air, booked, dnd, flow, coding, lunch, keep_out,
+# back_soon, chill_time, low_social_battery
+show = "name"
+sound = true
+
+# A CalDAV account. iCloud: https://caldav.icloud.com with an app-specific
+# password (appleid.apple.com -> Sign-In and Security -> App-Specific Passwords).
+# Fastmail: https://caldav.fastmail.com with an app password.
+# Nextcloud: https://cloud.example.com/remote.php/dav
+[[sources]]
+name = "iCloud"
+type = "caldav"
+url = "https://caldav.icloud.com"
+username = "me@icloud.com"
+# Give one of: password, password_env, password_command (argv, no shell).
+password_command = ["security", "find-generic-password", "-s", "busybar-icloud", "-w"]
+# Only these calendars (busybar-calendar calendars lists them). Default: all.
+# The one listed last wins when two events start together.
+include = ["Home", "Work"]
+
+[sources.calendars.Work.reminder]
+minutes_before = 10
+
+[sources.calendars.Work.status]
+show = "meeting"
+
+# A published ICS / webcal feed: one calendar, no credentials needed.
+# Outlook: Settings -> Calendar -> Shared calendars -> Publish a calendar.
+[[sources]]
+name = "Team"
+type = "ics"
+url = "webcal://outlook.office365.com/owa/calendar/.../calendar.ics"
+
+[sources.reminder]
+sound = false
