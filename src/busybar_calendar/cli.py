@@ -12,6 +12,9 @@ import sys
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
+import httpx
+from pydantic import ValidationError
+
 from . import __version__, connect, diagnose, playback, schedule, service, sources, wizard
 from . import config as config_module
 from .caldav import CalDAVError
@@ -202,6 +205,34 @@ def _where_you_stand(args: argparse.Namespace) -> int:
     return code
 
 
+# The failures a user can meet and fix: reported in a line or two, never a traceback.
+EXPECTED = (
+    ValidationError,
+    ConfigError,
+    CalDAVError,
+    sources.FatalSourceError,
+    httpx.HTTPError,
+    subprocess.CalledProcessError,
+    OSError,
+    ValueError,
+)
+
+
+def describe(error: BaseException) -> list[str]:
+    """An expected failure in the user's terms: what went wrong, where."""
+    if isinstance(error, ValidationError):  # the config: one line per problem
+        return [
+            f"{'.'.join(str(part) for part in problem['loc']) or 'config'}: "
+            f"{problem['msg'].removeprefix('Value error, ')}"
+            for problem in error.errors()
+        ]
+    if isinstance(error, httpx.RequestError):
+        return [f"cannot reach {error.request.url}: {error}"]
+    if isinstance(error, subprocess.CalledProcessError):  # launchctl, systemctl
+        return [f"{shlex.join(error.cmd)} failed (exit {error.returncode})"]
+    return [str(error)]
+
+
 def _restart_after(code: int) -> int:
     """After the config changed: a running background service reads it only when it starts."""
     if code == 0 and service.restart():
@@ -294,14 +325,9 @@ def main(argv: list[str] | None = None) -> int:
         args.config_path = config_module.find(args.config)
         config = config_module.load(args.config_path)
         return asyncio.run(handlers[args.command](config, args))
-    except (ConfigError, CalDAVError, sources.FatalSourceError, OSError, ValueError) as error:
-        print(f"busybar-calendar: {error}", file=sys.stderr)
-        return 1
-    except subprocess.CalledProcessError as error:  # launchctl, systemctl
-        print(
-            f"busybar-calendar: {shlex.join(error.cmd)} failed (exit {error.returncode})",
-            file=sys.stderr,
-        )
+    except EXPECTED as error:
+        for line in describe(error):
+            print(f"busybar-calendar: {line}", file=sys.stderr)
         return 1
     except KeyboardInterrupt:
         return 130

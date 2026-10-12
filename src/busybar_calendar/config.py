@@ -16,6 +16,7 @@ import subprocess
 import tomllib
 from pathlib import Path
 from typing import Any, Literal
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -223,6 +224,18 @@ class SyncConfig(_Strict):
         "this machine's.",
     )
 
+    @field_validator("timezone")
+    @classmethod
+    def _known_timezone(cls, value: str | None) -> str | None:
+        if value is not None:
+            try:
+                ZoneInfo(value)
+            except (ZoneInfoNotFoundError, ValueError) as error:
+                raise ValueError(
+                    f"{value!r} is not a timezone name; use one like 'Europe/Kyiv'"
+                ) from error
+        return value
+
 
 class SourceConfig(Overrides):
     name: str = Field(description="What logs and overrides call this source; unique.")
@@ -292,6 +305,14 @@ class Config(_Strict):
             raise ValueError("source names must be unique")
         return self
 
+    def check_settings(self) -> None:
+        """Build every calendar's settings now, so a bad value fails at start, not at the
+        first event."""
+        self.settings_for("", "")  # the defaults alone
+        for source in self.sources:
+            for calendar in [source.name, *source.calendars]:
+                self.settings_for(source.name, calendar)
+
     def settings_for(
         self, source: str, calendar: str, calendar_id: str = ""
     ) -> tuple[ReminderSettings, StatusSettings]:
@@ -349,8 +370,5 @@ def load(path: str | Path) -> Config:
     config = Config.model_validate(data)
     if not config.sources:
         raise ConfigError(f"{path}: no [[sources]]: add a CalDAV account or an ICS feed")
-    # Validate every calendar's settings up front rather than at the first event.
-    for source in config.sources:
-        for calendar in [source.name, *source.calendars]:
-            config.settings_for(source.name, calendar)
+    config.check_settings()
     return config

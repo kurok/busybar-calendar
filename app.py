@@ -127,7 +127,7 @@ def build_config(args: argparse.Namespace, path: Path | None) -> Config:
         sources.append(caldav)
 
     sound = not args.quiet
-    return Config.model_validate(
+    config = Config.model_validate(
         {
             "bar": bar,
             "defaults": {
@@ -137,6 +137,8 @@ def build_config(args: argparse.Namespace, path: Path | None) -> Config:
             "sources": sources,
         }
     )
+    config.check_settings()  # --minutes 0 fails here, not at the first event
+    return config
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -161,8 +163,9 @@ def main(argv: list[str] | None = None) -> int:
             file=sys.stderr,
         )
         return asyncio.run(cli.run_service(config))
-    except (ConfigError, ValueError, OSError) as error:
-        print(f"{APP}: {error}", file=sys.stderr)
+    except cli.EXPECTED as error:
+        for line in cli.describe(error):
+            print(f"{APP}: {line}", file=sys.stderr)
         return 2
 
 

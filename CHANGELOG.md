@@ -20,6 +20,16 @@ All notable changes to busybar-calendar. The format follows
   now one line naming the command and its exit code.
 - The service remembered every screen it had chimed for; it now forgets
   them once their events are gone, so a long-running service does not grow.
+- A mistyped `sync.timezone` ended every command in a traceback; it is now
+  rejected when the config is read, with an example of a valid name.
+- `calendars` and `replay` ended in a traceback when a calendar server could
+  not be reached; they now say which address and why.
+- A config mistake printed pydantic's whole report; it is now one line per
+  problem, naming the key (`bar.adress: Extra inputs are not permitted`), in
+  the CLI and in `app.py` alike.
+- `app.py --minutes 0` (and other invalid reminder or status settings given
+  as flags) was accepted and only failed at the first event; it now fails at
+  start.
 
 ## [0.2.0] - 2026-10-12
 

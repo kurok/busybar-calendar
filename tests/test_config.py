@@ -129,3 +129,9 @@ def test_events_of_no_source_get_the_defaults():
     config = Config.model_validate({"defaults": {"reminder": {"minutes_before": 2}}})
     reminder, status = config.settings_for("demo", "demo")
     assert (reminder.minutes_before, status.show) == (2, "name")
+
+
+def test_timezone_is_checked_when_loading():
+    with pytest.raises(ValidationError, match="not a timezone name"):
+        Config.model_validate({**base(), "sync": {"timezone": "Europe/Kiyv"}})
+    assert Config.model_validate({**base(), "sync": {"timezone": "Europe/Kyiv"}})

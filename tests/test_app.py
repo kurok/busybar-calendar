@@ -120,3 +120,10 @@ def test_ctrl_c_while_running_clears_and_ends_it_cleanly(no_config):
     code, err = _interrupt(command, 1.5)
     assert code == 0, err
     assert "Traceback" not in err
+
+
+def test_bad_flags_fail_at_start(no_config):
+    from pydantic import ValidationError
+
+    with pytest.raises(ValidationError, match="minutes_before"):
+        config_for(["--ics", "https://example.com/a.ics", "--minutes", "0"])

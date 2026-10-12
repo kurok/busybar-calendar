@@ -314,3 +314,43 @@ def test_a_failing_launchctl_is_one_line_not_a_traceback(tmp_path, monkeypatch, 
     assert cli.main(["-c", str(config), "install", "--force"]) == 1
     err = capsys.readouterr().err
     assert "launchctl bootstrap gui/501 x.plist failed (exit 5)" in err
+
+
+def _config_file(tmp_path, text):
+    path = tmp_path / "config.toml"
+    path.write_text(text)
+    return str(path)
+
+
+def test_config_mistakes_are_one_line_each(tmp_path, capsys):
+    path = _config_file(
+        tmp_path,
+        '[bar]\nadress = "x"\n[sync]\ntimezone = "Europe/Kiyv"\n'
+        '[[sources]]\nname = "Feed"\ntype = "ics"\nurl = "https://x"\n',
+    )
+    assert cli.main(["-c", path, "upcoming"]) == 1
+    err = capsys.readouterr().err.strip().splitlines()
+    assert "busybar-calendar: bar.adress: Extra inputs are not permitted" in err
+    assert any(line.startswith("busybar-calendar: sync.timezone: 'Europe/Kiyv'") for line in err)
+    assert not any("pydantic.dev" in line for line in err)
+
+
+def test_an_unreachable_server_is_one_line(tmp_path, monkeypatch, capsys):
+    import httpx
+
+    path = _config_file(
+        tmp_path,
+        '[[sources]]\nname = "Gone"\ntype = "caldav"\nurl = "https://dav.invalid/"\n',
+    )
+
+    async def unreachable(self):
+        request = httpx.Request("PROPFIND", "https://dav.invalid/")
+        raise httpx.ConnectError("name or service not known", request=request)
+
+    from busybar_calendar import sources
+
+    monkeypatch.setattr(sources.CalDAVSource, "calendars", unreachable)
+    assert cli.main(["-c", path, "calendars"]) == 1
+    assert capsys.readouterr().err.strip() == (
+        "busybar-calendar: cannot reach https://dav.invalid/: name or service not known"
+    )
