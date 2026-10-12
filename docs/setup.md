@@ -221,55 +221,26 @@ busybar-calendar -v run                    # run in the foreground with debug lo
 
 ## Run it as a service
 
-### macOS (launchd)
-
-`~/Library/LaunchAgents/app.busybar.calendar.plist`:
-
-```xml
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-  <key>Label</key><string>app.busybar.calendar</string>
-  <key>ProgramArguments</key>
-  <array>
-    <string>/Users/me/.local/bin/busybar-calendar</string>
-    <string>run</string>
-  </array>
-  <key>RunAtLoad</key><true/>
-  <key>KeepAlive</key><true/>
-  <key>StandardErrorPath</key><string>/tmp/busybar-calendar.log</string>
-</dict>
-</plist>
-```
-
 ```sh
-launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/app.busybar.calendar.plist
+busybar-calendar install
 ```
 
-A launch agent runs in your login session, so it can read the login
-Keychain.
+checks the setup, then makes it run in the background from now on: at
+login, and again if it stops. On macOS that is a launch agent
+(`~/Library/LaunchAgents/app.busybar.calendar.plist`, logging to
+`~/Library/Logs/busybar-calendar.log`); on Linux a systemd user unit
+(`~/.config/systemd/user/busybar-calendar.service`, logs in
+`journalctl --user -u busybar-calendar`).
 
-### Linux (systemd user unit)
-
-`~/.config/systemd/user/busybar-calendar.service`:
-
-```ini
-[Unit]
-Description=BUSY Bar calendar reminders
-After=network-online.target
-
-[Service]
-ExecStart=%h/.local/bin/busybar-calendar run
-Restart=on-failure
-
-[Install]
-WantedBy=default.target
-```
-
-```sh
-systemctl --user enable --now busybar-calendar
-```
+- It runs from the environment you installed from (a `uv tool` or a
+  virtualenv) and reads the config `install` found, wherever you start it.
+- Restarts are five minutes apart, so a calendar that refuses your password
+  is not asked again every few seconds.
+- A launch agent runs in your login session, so it can read the login
+  Keychain for `token_command` / `password_command`.
+- `--dry-run` shows the file and the commands without changing anything;
+  `--force` installs even when `check` finds a problem.
+- `busybar-calendar uninstall` stops and removes it.
 
 ### Docker
 

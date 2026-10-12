@@ -8,6 +8,7 @@ import contextlib
 import dataclasses
 import json
 import logging
+import shlex
 import signal
 import sys
 from collections.abc import Callable
@@ -18,7 +19,7 @@ from busylib.client import AsyncBusyBar
 from busylib.exceptions import BusyBarAPIError
 
 from . import config as config_module
-from . import render, schedule, sources
+from . import render, schedule, service, sources
 from .caldav import CalDAVError
 from .config import Config, ConfigError
 from .events import CalendarRef, Event
@@ -188,6 +189,45 @@ async def cmd_check(config: Config, _args: argparse.Namespace) -> int:
         await _close(items)
     print("\nAll good." if not problems else f"\n{problems} problem(s) above.")
     return 0 if not problems else 1
+
+
+async def cmd_install(config: Config, args: argparse.Namespace) -> int:
+    """Run the service in the background from now on: at login, restarted if it stops."""
+    plan = service.install_plan(args.config_path)
+    if args.dry_run:
+        print(f"Would write {plan.path}:\n")
+        print(plan.content.decode())
+        print("Would run:")
+        for command in [*plan.cleanup, *plan.commands]:
+            print("  " + shlex.join(command))
+        return 0
+    if not args.force:
+        print("Checking the setup first.\n")
+        if await cmd_check(config, args):
+            print("Fix the problems above, or install anyway with --force.")
+            return 1
+        print()
+    service.install(plan)
+    print(f"Installed {plan.path}.")
+    print("It runs at login, comes back if it stops, and reads", args.config_path.resolve())
+    if plan.log:
+        print(f"Log: {plan.log}")
+    print("Remove it with: busybar-calendar uninstall")
+    return 0
+
+
+def cmd_uninstall(args: argparse.Namespace) -> int:
+    plan = service.uninstall_plan()
+    if args.dry_run:
+        print(f"Would remove {plan.path} and run:")
+        for command in [*plan.cleanup, *plan.commands]:
+            print("  " + shlex.join(command))
+        return 0
+    if service.uninstall(plan):
+        print(f"Stopped and removed {plan.path}.")
+    else:
+        print("Not installed.")
+    return 0
 
 
 async def cmd_calendars(config: Config, _args: argparse.Namespace) -> int:
@@ -454,6 +494,13 @@ def main(argv: list[str] | None = None) -> int:
     commands = parser.add_subparsers(dest="command", required=True)
     commands.add_parser("run", help="keep the bar in step with the calendars")
     commands.add_parser("check", help="check the bar, its token and every calendar")
+    install = commands.add_parser(
+        "install", help="run in the background from now on (launchd / systemd)"
+    )
+    install.add_argument("--dry-run", action="store_true", help="show what it would do")
+    install.add_argument("--force", action="store_true", help="install even if check fails")
+    uninstall = commands.add_parser("uninstall", help="stop and remove the background service")
+    uninstall.add_argument("--dry-run", action="store_true", help="show what it would do")
     commands.add_parser("calendars", help="list the calendars each CalDAV source has")
     upcoming = commands.add_parser("upcoming", help="list the events the bar will show")
     upcoming.add_argument("--hours", type=int, default=24)
@@ -478,13 +525,17 @@ def main(argv: list[str] | None = None) -> int:
     handlers = {
         "run": cmd_run,
         "check": cmd_check,
+        "install": cmd_install,
         "calendars": cmd_calendars,
         "upcoming": cmd_upcoming,
         "demo": cmd_demo,
         "replay": cmd_replay,
     }
     try:
-        config = config_module.load(config_module.find(args.config))
+        if args.command == "uninstall":  # needs no config: there may be none left
+            return cmd_uninstall(args)
+        args.config_path = config_module.find(args.config)
+        config = config_module.load(args.config_path)
         return asyncio.run(handlers[args.command](config, args))
     except (ConfigError, CalDAVError, sources.FatalSourceError, OSError, ValueError) as error:
         print(f"busybar-calendar: {error}", file=sys.stderr)

@@ -116,11 +116,12 @@ busybar-calendar upcoming    # what the bar will show, and when
 busybar-calendar demo        # draw a sample reminder for 20 seconds
 busybar-calendar replay      # play tomorrow's events on the bar, a minute each
 busybar-calendar run         # keep the bar in step with your calendars
+busybar-calendar install     # ... in the background from now on (launchd / systemd)
 ```
 
 [docs/setup.md](docs/setup.md) covers connecting the bar (cloud token or LAN
 password), the URLs for each calendar provider, storing secrets, and
-running it as a service with launchd, systemd or Docker.
+running it in the background or in Docker.
 
 ## Settings
 
