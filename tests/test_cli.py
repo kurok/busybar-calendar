@@ -134,6 +134,7 @@ async def test_status_shows_now_and_next(monkeypatch, capsys, tmp_path):
             pass
 
     monkeypatch.setattr(connect, "make_sources", lambda config: [Source()])
+    monkeypatch.setattr(connect, "make_bar", lambda config: FakeBar())
     assert await diagnose.status(Config.model_validate(SOURCES)) == 0
     out = capsys.readouterr().out
     assert "running, pid 4321" in out
@@ -200,6 +201,7 @@ async def test_status_as_json(monkeypatch, capsys):
             pass
 
     monkeypatch.setattr(connect, "make_sources", lambda config: [Source()])
+    monkeypatch.setattr(connect, "make_bar", lambda config: FakeBar())
     await cli.cmd_status(Config.model_validate(SOURCES), argparse.Namespace(json=True))
     data = json.loads(capsys.readouterr().out)
     assert data["service"] == {
@@ -383,3 +385,61 @@ async def test_status_quiet_when_versions_match(monkeypatch, capsys, tmp_path):
     await diagnose.status(None)
     out = capsys.readouterr().out
     assert f"running {__version__}, pid 7" in out and "but this is" not in out
+
+
+async def test_status_says_when_the_bar_does_not_answer(monkeypatch, capsys):
+    import asyncio
+
+    from busybar_calendar import service
+
+    monkeypatch.setattr(service, "status", lambda: service.Status(True, True, pid=7))
+    monkeypatch.setattr(service, "recent_log", lambda state: [])
+    monkeypatch.setattr(connect, "make_sources", lambda config: [FakeSource()])
+
+    class Hung(FakeBar):
+        async def version(self):
+            await asyncio.sleep(60)  # a bar whose HTTP API hangs
+
+    monkeypatch.setattr(connect, "make_bar", lambda config: Hung())
+    monkeypatch.setattr(diagnose, "BAR_TIMEOUT", 0.05)
+    health = await diagnose.bar_health(Config.model_validate(SOURCES), timeout=0.05)
+    assert health == {"where": "BUSY Cloud", "answering": False, "detail": "no answer"}
+
+    data = {
+        "version": "x",
+        "service": {
+            "installed": True,
+            "running": True,
+            "pid": 7,
+            "detail": None,
+            "log": None,
+            "recent_log": [],
+            "version": None,
+        },
+        "bar": health,
+        "calendar": None,
+    }
+    diagnose.print_status(data)
+    out = capsys.readouterr().out
+    assert "Bar       BUSY Cloud: NOT answering (no answer)" in out
+    assert "unplug it and plug it back in" in out
+
+
+async def test_bar_health_cases(monkeypatch):
+    config = Config.model_validate(SOURCES)
+    monkeypatch.setattr(connect, "make_bar", lambda config: FakeBar())
+    assert (await diagnose.bar_health(config))["answering"] is True
+
+    class Refusing(FakeBar):
+        async def version(self):
+            raise BusyBarAPIError("Forbidden", status_code=403)
+
+    monkeypatch.setattr(connect, "make_bar", lambda config: Refusing())
+    health = await diagnose.bar_health(config)
+    assert health["answering"] is True and "refused (403)" in health["detail"]
+
+    def no_bar(config):
+        raise ConfigError("give bar.address, or a bar-scope cloud token as bar.token")
+
+    monkeypatch.setattr(connect, "make_bar", no_bar)
+    assert (await diagnose.bar_health(config))["answering"] is False

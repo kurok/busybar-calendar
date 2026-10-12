@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import contextlib
 import json
 import logging
@@ -12,7 +13,7 @@ from busylib.client import AsyncBusyBar
 from busylib.exceptions import BusyBarAPIError
 
 from . import __version__, connect, schedule, service, sources
-from .config import Config
+from .config import Config, ConfigError
 from .events import Event
 from .runner import Runner
 
@@ -194,6 +195,37 @@ def _screen_json(screen: schedule.Screen, tz: tzinfo, **moment: str) -> dict:
     return {"kind": screen.kind, **_event_json(screen.event, tz), **moment}
 
 
+BAR_TIMEOUT = 5.0  # seconds; a bar that takes longer is as good as not answering
+
+
+async def bar_health(config: Config, timeout: float = BAR_TIMEOUT) -> dict:
+    """Whether the bar answers at all: one light, read-only call, as `check` makes."""
+    where = config.bar.address or "BUSY Cloud"
+    try:
+        bar = connect.make_bar(config)
+    except ConfigError as error:  # no address and no token: nothing to ask
+        return {"where": where, "answering": False, "detail": str(error)}
+    try:
+        await asyncio.wait_for(bar.version(), timeout)
+        return {"where": where, "answering": True, "detail": None}
+    except BusyBarAPIError as error:
+        if error.status_code in (401, 403):  # it is there; the token is the problem
+            return {
+                "where": where,
+                "answering": True,
+                "detail": f"refused ({error.status_code}): `busybar-calendar check` says why",
+            }
+        return {"where": where, "answering": False, "detail": str(error)}
+    except Exception as error:
+        detail = (
+            "no answer" if isinstance(error, TimeoutError) else str(error) or type(error).__name__
+        )
+        return {"where": where, "answering": False, "detail": detail}
+    finally:
+        with contextlib.suppress(Exception):
+            await bar.aclose()
+
+
 async def status_data(config: Config | None) -> dict:
     """What `status` reports, as data: the service, and the calendar's screen now and next."""
     state = service.status()
@@ -208,10 +240,12 @@ async def status_data(config: Config | None) -> dict:
             "recent_log": service.recent_log(state),
             "version": service.running_version(state) if state.running else None,
         },
+        "bar": None,
         "calendar": None,
     }
     if config is None:
         return data
+    data["bar"] = await bar_health(config)
     items = connect.make_sources(config)
     runner = Runner(config, bar=None, sources=items)  # type: ignore[arg-type]
     now = datetime.now(UTC)
@@ -251,6 +285,17 @@ def print_status(data: dict) -> None:
         print(f"          log {svc['log']}")
     for line in svc["recent_log"]:
         print(f"            {line}")
+    bar = data.get("bar")
+    if bar is not None:
+        if bar["answering"] and not bar["detail"]:
+            print(f"Bar       {bar['where']}: answering")
+        elif bar["answering"]:
+            print(f"Bar       {bar['where']}: {bar['detail']}")
+        else:
+            print(
+                f"Bar       {bar['where']}: NOT answering ({bar['detail']}). Is it on and "
+                "online? If it stays stuck, unplug it and plug it back in."
+            )
     calendar = data["calendar"]
     if calendar is None:
         print("Calendar  no config yet: `busybar-calendar init` writes one")

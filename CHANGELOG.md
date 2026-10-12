@@ -6,6 +6,12 @@ All notable changes to busybar-calendar. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- `status` checks the bar with one light read-only call and says whether it
+  answers, refuses the token, or does not answer at all - with what to do -
+  so a stuck bar no longer looks like a healthy setup.
+
 ### Fixed
 
 - Event titles are capped at 120 characters (a longer one only scrolls

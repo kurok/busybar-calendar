@@ -50,6 +50,20 @@ must be on the bar's network for a LAN address (**Settings -> Wi-Fi -> your
 network -> View IP Address** on the bar). Over USB the bar is always
 `10.0.4.20`. BUSY Cloud works from anywhere.
 
+## The bar stopped answering
+
+`status` checks the bar too:
+
+```
+Bar       BUSY Cloud: NOT answering (no answer). Is it on and online? If it stays stuck, unplug it and plug it back in.
+```
+
+A bar that answers ping but not its HTTP API - not on the LAN, not through
+BUSY Cloud - has a stuck HTTP server; the service cannot draw until it is
+power-cycled, and carries on by itself once the bar is back. (Seen on
+firmware 1.2.4 after a draw request with a title of thousands of
+characters; the service now caps titles at 120.)
+
 ## A calendar refuses the password
 
 ```
