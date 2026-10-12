@@ -66,13 +66,20 @@ start at the same time, the calendar listed last wins.
 | iCloud | `https://caldav.icloud.com` | an app-specific password (account.apple.com -> Sign-In and Security -> App-Specific Passwords) |
 | Fastmail | `https://caldav.fastmail.com` | an app password (Settings -> Privacy & Security) |
 | Nextcloud | `https://cloud.example.com/remote.php/dav` | your password, or an app password |
-| PrivateEmail (Namecheap) | `https://dav.privateemail.com/dav.php/calendars/<your address>/default` | your mailbox password |
+| PrivateEmail (Namecheap) | `https://dav.privateemail.com` | your mailbox password |
 | Radicale, Baïkal, Synology, others | the server's root URL, or a calendar's URL | as the server wants it |
 
 `username` is usually your full email address. A root URL is enough when
 the server supports discovery (`/.well-known/caldav`); otherwise give the
 URL of one calendar, and it is used as it is. Servers that only speak
 Digest auth need `auth = "digest"`.
+
+Organisation accounts often expose shared calendars too. A PrivateEmail
+business mailbox, for example, lists every meeting room and team calendar
+next to your own, and with the default of "all calendars" other people's
+room bookings would reach your bar. List yours under `include`, or use your
+calendar's URL (`https://dav.privateemail.com/dav.php/calendars/<address>/<id>/`,
+as `busybar-calendar calendars` prints it).
 
 ```toml
 [[sources]]

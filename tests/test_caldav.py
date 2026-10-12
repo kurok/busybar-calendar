@@ -44,7 +44,11 @@ class FakeServer:
         if url == "https://caldav.example/":
             return httpx.Response(405)
         if url == "https://caldav.example/.well-known/caldav":
-            return httpx.Response(301, headers={"Location": "https://caldav.example/dav/"})
+            # A 302, as PrivateEmail and many others send: an HTTP client that
+            # turns it into a GET would get this server's 405 below.
+            return httpx.Response(302, headers={"Location": "/dav/"})
+        if url == "https://caldav.example/dav/" and request.method != "PROPFIND":
+            return httpx.Response(405)
         if url == "https://caldav.example/dav/":
             return httpx.Response(
                 207,

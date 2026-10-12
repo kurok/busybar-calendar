@@ -59,6 +59,9 @@ _REPORT_RANGE = """<?xml version="1.0" encoding="utf-8"?>
 </c:calendar-query>"""
 
 
+MAX_REDIRECTS = 5
+
+
 class CalDAVError(Exception):
     pass
 
@@ -88,13 +91,26 @@ class CalDAVClient:
         self._http = http
         self._url = url
 
+    async def _send(self, method: str, url: str, body: str, depth: str) -> httpx.Response:
+        """
+        Send a DAV request, following redirects with the method and body intact.
+
+        httpx, like browsers, turns a 302 into a GET; a PROPFIND that becomes
+        a GET is refused. /.well-known/caldav is usually a 302 (RFC 6764).
+        """
+        headers = {"Depth": depth, "Content-Type": "application/xml; charset=utf-8"}
+        for _ in range(MAX_REDIRECTS + 1):
+            response = await self._http.request(
+                method, url, content=body.encode(), headers=headers, follow_redirects=False
+            )
+            location = response.headers.get("Location")
+            if response.status_code not in (301, 302, 303, 307, 308) or not location:
+                return response
+            url = urljoin(str(response.url), location)
+        raise CalDAVError(f"{method} {url}: more than {MAX_REDIRECTS} redirects")
+
     async def _dav(self, method: str, url: str, body: str, depth: str) -> list[_Response]:
-        response = await self._http.request(
-            method,
-            url,
-            content=body.encode(),
-            headers={"Depth": depth, "Content-Type": "application/xml; charset=utf-8"},
-        )
+        response = await self._send(method, url, body, depth)
         if response.status_code in (401, 403):
             raise CalDAVAuthError(f"{method} {url}: {response.status_code}, check the credentials")
         if response.status_code != 207:
