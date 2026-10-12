@@ -93,6 +93,7 @@ uv tool install .            # puts busybar-calendar on your PATH
 busybar-calendar init        # a few questions: the bar, the calendar; writes the config
 busybar-calendar check       # the bar, its token and every calendar, in one go
 busybar-calendar install     # keep it running in the background (launchd / systemd)
+busybar-calendar status      # is it running, what did it last do, what is on the bar next
 ```
 
 `init` asks how to reach the bar (BUSY Cloud, Wi-Fi or USB) and which

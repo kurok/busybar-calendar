@@ -75,3 +75,84 @@ def test_systemd_quotes_paths_with_spaces():
     text = unit.decode()
     assert 'Environment="BUSYBAR_CALENDAR_CONFIG=/a b/c.toml"' in text
     assert 'ExecStart="/opt/my tools/python" -m x' in text
+
+
+# Shapes taken from `launchctl print` on macOS: the job's fields one tab deep,
+# nested blocks (which repeat `state`) deeper.
+RUNNING = """gui/501/app.busybar.calendar = {
+\tactive count = 1
+\tpath = /Users/me/Library/LaunchAgents/app.busybar.calendar.plist
+\tstate = running
+\tprogram = /usr/bin/python3
+\truns = 1
+\tpid = 20464
+\tlast exit code = (never exited)
+\tendpoints = {
+\t\tstate = active
+\t}
+}
+"""
+STOPPED = (
+    RUNNING.replace("state = running", "state = not running")
+    .replace("\tpid = 20464\n", "")
+    .replace("(never exited)", "1")
+)
+
+
+def test_parse_launchctl_takes_only_the_jobs_own_fields():
+    fields = service.parse_launchctl(RUNNING)
+    assert (fields["state"], fields["pid"]) == ("running", "20464")
+
+
+class Done:
+    def __init__(self, returncode=0, stdout=""):
+        self.returncode, self.stdout = returncode, stdout
+
+
+@pytest.mark.parametrize(
+    ("output", "expected"),
+    [
+        (Done(0, RUNNING), (True, 20464, "")),
+        (Done(0, STOPPED), (False, None, "last exit code 1")),
+        (Done(113, ""), (False, None, "not loaded")),
+    ],
+)
+def test_status_on_macos(home, monkeypatch, output, expected):
+    agent = home / "Library/LaunchAgents/app.busybar.calendar.plist"
+    agent.parent.mkdir(parents=True)
+    agent.write_text("<plist/>")
+    monkeypatch.setattr(service.subprocess, "run", lambda *a, **k: output)
+    state = service.status("darwin")
+    assert state.installed
+    assert (state.running, state.pid, state.detail) == expected
+    assert state.log == home / "Library/Logs/busybar-calendar.log"
+
+
+def test_status_not_installed(home, monkeypatch):
+    monkeypatch.setattr(service.subprocess, "run", lambda *a, **k: Done(113))
+    state = service.status("darwin")
+    assert (state.installed, state.running, state.detail) == (False, False, "")
+
+
+def test_status_on_linux(home, monkeypatch):
+    monkeypatch.setattr(
+        service.subprocess,
+        "run",
+        lambda *a, **k: Done(0, "ActiveState=failed\nMainPID=0\nExecMainStatus=1\n"),
+    )
+    state = service.status("linux")
+    assert (state.running, state.pid, state.detail) == (False, None, "last exit code 1")
+    monkeypatch.setattr(
+        service.subprocess,
+        "run",
+        lambda *a, **k: Done(0, "ActiveState=active\nMainPID=4321\nExecMainStatus=0\n"),
+    )
+    assert service.status("linux").pid == 4321
+
+
+def test_recent_log_reads_the_tail(tmp_path):
+    log = tmp_path / "busybar-calendar.log"
+    log.write_text("\n".join(f"line {n}" for n in range(20)))
+    state = service.Status(True, True, log=log)
+    assert service.recent_log(state, 3) == ["line 17", "line 18", "line 19"]
+    assert service.recent_log(service.Status(True, True, log=tmp_path / "none"), 3) == []

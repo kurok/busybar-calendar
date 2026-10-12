@@ -6,6 +6,7 @@ The quick way is three commands:
 busybar-calendar init      # answers in, config out: the bar, the calendar, the passwords
 busybar-calendar check     # proves it works, or says what to fix
 busybar-calendar install   # runs it in the background from now on
+busybar-calendar status    # and later: is it running, and what is on the bar next
 ```
 
 The rest of this page is what those commands do for you, for when you
@@ -253,6 +254,19 @@ login, and again if it stops. On macOS that is a launch agent
   `--force` installs even when `check` finds a problem.
 - `busybar-calendar uninstall` stops and removes it.
 
+`busybar-calendar status` shows how it is doing:
+
+```
+Service   running, pid 4321
+          log /Users/me/Library/Logs/busybar-calendar.log
+            16:40:19 INFO busybar_calendar.runner: reminder: Design review (Work, accepted) ...
+            16:45:00 INFO busybar_calendar.runner: status: Design review (Work, accepted) ...
+Calendar  now status: Design review, until Tue 13 Oct 17:30 (in 44m)
+          next reminder: Retro, at Tue 13 Oct 17:55 (in 1h 09m)
+```
+
+A stopped service shows its last exit code, with the log lines that explain it.
+
 ### Docker
 
 ```sh
@@ -266,6 +280,9 @@ In a container, use `token_env` and `password_env`, since the Keychain is
 not there.
 
 ## Troubleshooting
+
+Start with `busybar-calendar check` (is the setup right?) and
+`busybar-calendar status` (is the service running, and what did it last log?).
 
 | Symptom | Cause |
 | --- | --- |

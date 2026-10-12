@@ -232,6 +232,55 @@ def cmd_uninstall(args: argparse.Namespace) -> int:
     return 0
 
 
+def _when(moment: datetime, now: datetime, tz: tzinfo) -> str:
+    minutes = max(0, int((moment - now).total_seconds() // 60))
+    hours, minutes = divmod(minutes, 60)
+    delta = f"in {hours}h {minutes:02d}m" if hours else f"in {minutes}m"
+    return f"{moment.astimezone(tz):%a %d %b %H:%M} ({delta})"
+
+
+async def cmd_status(config: Config | None, _args: argparse.Namespace) -> int:
+    """Is it running, what did it last do, and what is on the bar now and next."""
+    state = service.status()
+    if state.running:
+        print(f"Service   running{f', pid {state.pid}' if state.pid else ''}")
+    elif state.installed:
+        print(f"Service   stopped{f' ({state.detail})' if state.detail else ''}; the log says why")
+    else:
+        print("Service   not installed: `busybar-calendar install` runs it in the background")
+    if state.log and state.log.exists():
+        print(f"          log {state.log}")
+    for line in service.recent_log(state):
+        print(f"            {line}")
+
+    if config is None:
+        print("Calendar  no config yet: `busybar-calendar init` writes one")
+        return 0
+    items = _sources(config)
+    runner = Runner(config, bar=None, sources=items)  # type: ignore[arg-type]
+    now = datetime.now(UTC)
+    try:
+        await runner.refresh(now)
+    finally:
+        await _close(items)
+    tz = _floating_tz(config)
+    screen = schedule.choose(now, runner.events, runner.settings_for)
+    if screen is None:
+        print("Calendar  nothing on the bar now")
+    else:
+        print(
+            f"Calendar  now {screen.kind}: {screen.event.title}, "
+            f"until {_when(screen.until, now, tz)}"
+        )
+    following = schedule.upcoming(now, runner.events, runner.settings_for)
+    if following is None:
+        print(f"          nothing more in the next {config.sync.lookahead_hours} hours")
+    else:
+        moment, nxt = following
+        print(f"          next {nxt.kind}: {nxt.event.title}, at {_when(moment, now, tz)}")
+    return 0
+
+
 async def cmd_calendars(config: Config, _args: argparse.Namespace) -> int:
     items = _sources(config)
     try:
@@ -498,6 +547,7 @@ def main(argv: list[str] | None = None) -> int:
     init = commands.add_parser("init", help="answer a few questions to write the config")
     init.add_argument("--force", action="store_true", help="replace an existing config")
     commands.add_parser("check", help="check the bar, its token and every calendar")
+    commands.add_parser("status", help="is it running, and what is on the bar now and next")
     install = commands.add_parser(
         "install", help="run in the background from now on (launchd / systemd)"
     )
@@ -538,6 +588,12 @@ def main(argv: list[str] | None = None) -> int:
     try:
         if args.command == "uninstall":  # needs no config: there may be none left
             return cmd_uninstall(args)
+        if args.command == "status":  # the service part needs no config
+            try:
+                config = config_module.load(config_module.find(args.config))
+            except ConfigError:
+                config = None
+            return asyncio.run(cmd_status(config, args))
         if args.command == "init":  # writes the config
             path = Path(
                 args.config

@@ -149,3 +149,86 @@ def uninstall(plan: Plan) -> bool:
     for command in plan.commands:
         subprocess.run(command, check=True)
     return True
+
+
+@dataclass(frozen=True)
+class Status:
+    installed: bool  # the agent / unit file is there
+    running: bool
+    pid: int | None = None
+    detail: str = ""  # why it is not running, when that is known
+    log: Path | None = None
+
+
+def parse_launchctl(text: str) -> dict[str, str]:
+    """The job's own fields from `launchctl print`: one tab deep; nested blocks go deeper."""
+    fields: dict[str, str] = {}
+    for line in text.splitlines():
+        if line.startswith("\t") and not line.startswith("\t\t") and " = " in line:
+            key, _, value = line.strip().partition(" = ")
+            fields.setdefault(key, value)
+    return fields
+
+
+def parse_systemctl(text: str) -> dict[str, str]:
+    return dict(line.split("=", 1) for line in text.splitlines() if "=" in line)
+
+
+def status(platform: str = sys.platform) -> Status:
+    plan = uninstall_plan(platform)
+    installed = plan.path.exists()
+    if platform == "darwin":
+        log = _home() / "Library" / "Logs" / "busybar-calendar.log"
+        done = subprocess.run(
+            ["launchctl", "print", f"gui/{os.getuid()}/{LABEL}"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if done.returncode != 0:
+            return Status(installed, False, detail="not loaded" if installed else "", log=log)
+        fields = parse_launchctl(done.stdout)
+        running = fields.get("state") == "running"
+        pid = int(fields["pid"]) if fields.get("pid", "").isdigit() else None
+        exit_code = fields.get("last exit code", "")
+        detail = "" if running else f"last exit code {exit_code}" if exit_code else ""
+        return Status(installed, running, pid, detail, log)
+    done = subprocess.run(
+        [
+            "systemctl",
+            "--user",
+            "show",
+            UNIT,
+            "-p",
+            "ActiveState",
+            "-p",
+            "MainPID",
+            "-p",
+            "ExecMainStatus",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    fields = parse_systemctl(done.stdout)
+    running = fields.get("ActiveState") == "active"
+    pid = int(fields["MainPID"]) if fields.get("MainPID", "0") not in ("", "0") else None
+    exit_code = fields.get("ExecMainStatus", "")
+    detail = "" if running else f"last exit code {exit_code}" if exit_code not in ("", "0") else ""
+    return Status(installed, running, pid, detail)
+
+
+def recent_log(state: Status, lines: int = 5) -> list[str]:
+    """The service's last few log lines, best effort."""
+    if state.log is not None:
+        try:
+            return state.log.read_text(errors="replace").splitlines()[-lines:]
+        except OSError:
+            return []
+    done = subprocess.run(
+        ["journalctl", "--user", "-u", UNIT, "-n", str(lines), "--no-pager", "-o", "cat"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    return done.stdout.splitlines()[-lines:] if done.returncode == 0 else []

@@ -2,7 +2,7 @@ from datetime import UTC, datetime, timedelta
 
 from busybar_calendar.config import ReminderSettings, StatusSettings
 from busybar_calendar.events import CalendarRef, Event
-from busybar_calendar.schedule import choose, next_change
+from busybar_calendar.schedule import choose, next_change, upcoming
 
 T0 = datetime(2026, 10, 13, 9, 0, tzinfo=UTC)
 WORK = CalendarRef("icloud", "Work", 0)
@@ -126,3 +126,15 @@ def test_tentative_events_can_stay_off_the_busy_status():
     assert choose(at(70), events, quiet).kind == "status"
     # By default a tentative event shows its status like any other.
     assert choose(at(20), events, settings()).kind == "status"
+
+
+def test_upcoming_finds_the_next_screen_change():
+    events = [event("Sync", 10), event("Later", 120)]
+    s = settings(ReminderSettings(minutes_before=5))
+    assert upcoming(at(0), events, s)[0] == at(5)  # Sync's reminder opens
+    assert upcoming(at(0), events, s)[1].kind == "reminder"
+    moment, screen = upcoming(at(6), events, s)
+    assert (moment, screen.kind, screen.event.title) == (at(10), "status", "Sync")
+    moment, screen = upcoming(at(20), events, s)  # Sync ends at 40: Later's reminder at 115
+    assert (moment, screen.event.title) == (at(115), "Later")
+    assert upcoming(at(200), events, s) is None

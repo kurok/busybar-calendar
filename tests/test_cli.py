@@ -95,3 +95,48 @@ def test_a_missing_config_says_how_to_make_one(tmp_path):
 
     with pytest.raises(ConfigError, match="busybar-calendar init"):
         load(tmp_path / "nope.toml")
+
+
+async def test_status_without_a_config(monkeypatch, capsys):
+    from busybar_calendar import service
+
+    monkeypatch.setattr(service, "status", lambda: service.Status(False, False))
+    monkeypatch.setattr(service, "recent_log", lambda state: [])
+    assert await cli.cmd_status(None, None) == 0
+    out = capsys.readouterr().out
+    assert "not installed" in out and "busybar-calendar install" in out
+    assert "busybar-calendar init" in out
+
+
+async def test_status_shows_now_and_next(monkeypatch, capsys, tmp_path):
+    from datetime import UTC, datetime, timedelta
+
+    from busybar_calendar import service
+    from busybar_calendar.events import CalendarRef, Event
+
+    log = tmp_path / "busybar-calendar.log"
+    log.write_text("16:40:19 reminder: Design review\n")
+    monkeypatch.setattr(service, "status", lambda: service.Status(True, True, pid=4321, log=log))
+    now = datetime.now(UTC)
+    ref = CalendarRef("Feed", "Feed", 0)
+    running = Event(
+        "a", "Design review", now - timedelta(minutes=5), now + timedelta(minutes=25), ref
+    )
+    later = Event("b", "Retro", now + timedelta(hours=2), now + timedelta(hours=3), ref)
+
+    class Source:
+        name = "Feed"
+
+        async def fetch(self, start, end):
+            return [running, later]
+
+        async def aclose(self):
+            pass
+
+    monkeypatch.setattr(cli, "_sources", lambda config: [Source()])
+    assert await cli.cmd_status(Config.model_validate(SOURCES), None) == 0
+    out = capsys.readouterr().out
+    assert "running, pid 4321" in out
+    assert "reminder: Design review" in out  # the log tail
+    assert "now status: Design review" in out
+    assert "next reminder: Retro" in out

@@ -86,3 +86,20 @@ def next_change(
             if moment > now:
                 upcoming.append(moment)
     return min(upcoming, default=None)
+
+
+def upcoming(
+    now: datetime, events: Iterable[Event], settings_for: SettingsFor, horizon: int = 500
+) -> tuple[datetime, Screen] | None:
+    """The next moment a screen opens or gives way to another, and that screen."""
+    events = list(events)
+    current = choose(now, events, settings_for)
+    moment: datetime | None = now
+    for _ in range(horizon):
+        moment = next_change(moment, events, settings_for)
+        if moment is None:
+            return None
+        screen = choose(moment, events, settings_for)
+        if screen is not None and (current is None or screen.key != current.key):
+            return moment, screen
+    return None
