@@ -43,7 +43,7 @@ show = "name"
 sound = true
 
 # A CalDAV account. iCloud: https://caldav.icloud.com with an app-specific
-# password (appleid.apple.com -> Sign-In and Security -> App-Specific Passwords).
+# password (account.apple.com -> Sign-In and Security -> App-Specific Passwords).
 # Fastmail: https://caldav.fastmail.com with an app password.
 # Nextcloud: https://cloud.example.com/remote.php/dav
 [[sources]]
@@ -53,10 +53,14 @@ url = "https://caldav.icloud.com"
 username = "me@icloud.com"
 # Give one of: password, password_env, password_command (argv, no shell).
 password_command = ["security", "find-generic-password", "-s", "busybar-icloud", "-w"]
-# Only these calendars (busybar-calendar calendars lists them). Default: all.
-# The one listed last wins when two events start together.
+# Which calendars to use: `busybar-calendar calendars` lists their ids and
+# names. Each entry is a name, an id or a URL; * and ? are wildcards.
+# Default: all. The one listed last wins when two events start together.
 include = ["Home", "Work"]
+# Leave these out, after include:
+# exclude = ["Room *"]
 
+# Per-calendar overrides, keyed by name or by id.
 [sources.calendars.Work.reminder]
 minutes_before = 10
 

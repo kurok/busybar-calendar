@@ -160,8 +160,12 @@ class SourceConfig(Overrides):
     # Attendee address(es) that are you, so an invitation you declined is
     # skipped. Defaults to the username when that is an email address.
     emails: list[str] = Field(default_factory=list)
-    # CalDAV only: calendar display names to use. Empty means all of them.
+    # CalDAV only. Calendars to use (default: all) and to leave out, each
+    # entry a display name, an id (the URL's last segment) or a URL, with *
+    # and ? as wildcards. `busybar-calendar calendars` shows names and ids.
     include: list[str] = Field(default_factory=list)
+    exclude: list[str] = Field(default_factory=list)
+    # Per-calendar overrides, keyed by display name or by id.
     calendars: dict[str, Overrides] = Field(default_factory=dict)
 
     @model_validator(mode="before")
@@ -175,9 +179,11 @@ class SourceConfig(Overrides):
             self.url = "https://" + self.url.removeprefix("webcal://")
         if not self.emails and self.username and "@" in self.username:
             self.emails = [self.username]
-        if self.type == "ics" and (self.include or self.calendars):
+        if self.type == "ics" and (self.include or self.exclude or self.calendars):
             # An ICS feed is one calendar, named after its source.
-            raise ValueError(f"source {self.name!r}: include/calendars apply to caldav only")
+            raise ValueError(
+                f"source {self.name!r}: include/exclude/calendars apply to caldav only"
+            )
         return self
 
 
@@ -195,11 +201,16 @@ class Config(_Strict):
             raise ValueError("source names must be unique")
         return self
 
-    def settings_for(self, source: str, calendar: str) -> tuple[ReminderSettings, StatusSettings]:
-        """The effective settings of one calendar: defaults, then source, then calendar."""
+    def settings_for(
+        self, source: str, calendar: str, calendar_id: str = ""
+    ) -> tuple[ReminderSettings, StatusSettings]:
+        """
+        The effective settings of one calendar: defaults, then the source, then
+        the calendar's overrides by name, then by id.
+        """
         src = next(s for s in self.sources if s.name == source)
-        cal = src.calendars.get(calendar, Overrides())
-        layers = (self.defaults, src, cal)
+        layers: list[Overrides] = [self.defaults, src]
+        layers += [src.calendars[key] for key in (calendar, calendar_id) if key in src.calendars]
         reminder: dict[str, Any] = {}
         status: dict[str, Any] = {}
         for layer in layers:

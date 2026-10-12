@@ -75,15 +75,19 @@ async def cmd_calendars(config: Config, _args: argparse.Namespace) -> int:
         for item in items:
             if isinstance(item, sources.CalDAVSource):
                 found = await item.calendars()
-                print(f"{item.name} (caldav): {len(found)} calendars")
+                used, unmatched = sources.select(found, item.config.include, item.config.exclude)
+                print(f"{item.name} (caldav): {len(found)} calendars, {len(used)} used")
+                width = max((len(calendar.id) for calendar in found), default=0)
                 for calendar in found:
-                    used = not item.config.include or calendar.name in item.config.include
-                    print(f"  {'*' if used else ' '} {calendar.name}  {calendar.url}")
+                    mark = "*" if calendar in used else " "
+                    print(f"  {mark} {calendar.id:<{width}}  {calendar.name}")
+                for pattern in unmatched:
+                    print(f"  ! no calendar matches {pattern!r}")
             else:
                 print(f"{item.name} (ics): one calendar, {item.config.url}")
     finally:
         await _close(items)
-    print("\n* = used (all calendars unless the source lists `include`)")
+    print("\n* = used. Filter with include/exclude by id, name or URL; * and ? are wildcards.")
     return 0
 
 

@@ -40,6 +40,8 @@ back to whatever it was showing.
 
 - **CalDAV** with discovery (`/.well-known/caldav`, principal, calendar home),
   or a calendar URL directly; Basic or Digest auth.
+- **Calendar filters**: `include` / `exclude` by name, id or URL, with
+  wildcards (`exclude = ["Room *"]`).
 - **ICS / webcal** feeds, fetched with `If-None-Match`.
 - **Recurring events** expanded locally (RRULE, EXDATE, moved occurrences),
   timezones and floating times handled.

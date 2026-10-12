@@ -9,7 +9,9 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from collections.abc import Sequence
 from datetime import datetime, tzinfo
+from fnmatch import fnmatchcase
 
 import httpx
 
@@ -24,6 +26,42 @@ USER_AGENT = "busybar-calendar"
 MAX_FEED_BYTES = 32 * 1024 * 1024
 # Calendars are listed again after this many refreshes, to pick up new ones.
 REDISCOVER_EVERY = 12
+
+
+def matches(calendar: RemoteCalendar, pattern: str) -> bool:
+    """
+    Whether a filter entry names this calendar.
+
+    An entry is a calendar's display name, its id (the last segment of its
+    URL) or its URL, and may use the wildcards * and ?: "Office - Room *".
+    """
+    values = (calendar.name, calendar.id, calendar.url, calendar.url.rstrip("/"))
+    return any(fnmatchcase(value, pattern) for value in values)
+
+
+def select(
+    calendars: Sequence[RemoteCalendar], include: Sequence[str], exclude: Sequence[str]
+) -> tuple[list[RemoteCalendar], list[str]]:
+    """
+    The calendars to use, in overlap order, and the entries that matched nothing.
+
+    With `include`, calendars come in the order their entries are listed, so
+    the one listed last wins when two events start together; without it, all
+    of them in the server's order. `exclude` then removes calendars.
+    """
+    if include:
+        chosen: list[RemoteCalendar] = []
+        for pattern in include:
+            chosen += [c for c in calendars if c not in chosen and matches(c, pattern)]
+    else:
+        chosen = list(calendars)
+    chosen = [c for c in chosen if not any(matches(c, pattern) for pattern in exclude)]
+    unmatched = [
+        pattern
+        for pattern in (*include, *exclude)
+        if not any(matches(calendar, pattern) for calendar in calendars)
+    ]
+    return chosen, unmatched
 
 
 def http_client(source: SourceConfig) -> httpx.AsyncClient:
@@ -51,8 +89,8 @@ class Source:
         self._floating_tz = floating_tz
         self._skip_free = skip_free
 
-    def _ref(self, calendar: str, position: int) -> events.CalendarRef:
-        return events.CalendarRef(self.name, calendar, self._index * 1000 + position)
+    def _ref(self, calendar: str, position: int, calendar_id: str = "") -> events.CalendarRef:
+        return events.CalendarRef(self.name, calendar, self._index * 1000 + position, calendar_id)
 
     def _parse(self, data, ref, start, end) -> list[events.Event]:
         return events.parse(
@@ -102,31 +140,30 @@ class CalDAVSource(Source):
         self._client = CalDAVClient(self._http, self.config.url)
         self._calendars: list[RemoteCalendar] = []
         self._refreshes = 0
+        self._unmatched: list[str] = []
 
     async def calendars(self) -> list[RemoteCalendar]:
-        """Every event calendar on the account, before `include` is applied."""
+        """Every event calendar on the account, before `include` and `exclude`."""
         return await self._client.discover()
 
     async def _selected(self) -> list[tuple[int, RemoteCalendar]]:
         if not self._calendars or self._refreshes % REDISCOVER_EVERY == 0:
             self._calendars = await self.calendars()
         self._refreshes += 1
-        include = self.config.include
-        if not include:
-            return list(enumerate(self._calendars))
-        by_name = {calendar.name: calendar for calendar in self._calendars}
-        missing = [name for name in include if name not in by_name]
-        if missing:
-            logger.warning("%s: no calendar named %s", self.name, ", ".join(missing))
-        # Ordered as listed, so the last one listed wins an overlap.
-        return [(i, by_name[name]) for i, name in enumerate(include) if name in by_name]
+        selected, unmatched = select(self._calendars, self.config.include, self.config.exclude)
+        if unmatched != self._unmatched:
+            if unmatched:
+                logger.warning("%s: no calendar matches %s", self.name, ", ".join(unmatched))
+            self._unmatched = unmatched
+        return list(enumerate(selected))
 
     async def fetch(self, start: datetime, end: datetime) -> list[events.Event]:
         selected = await self._selected()
 
         async def one(position: int, calendar: RemoteCalendar) -> list[events.Event]:
             documents = await self._client.events(calendar, start, end)
-            return self._parse(documents, self._ref(calendar.name, position), start, end)
+            ref = self._ref(calendar.name, position, calendar.id)
+            return self._parse(documents, ref, start, end)
 
         results = await asyncio.gather(*(one(i, c) for i, c in selected))
         return [event for result in results for event in result]

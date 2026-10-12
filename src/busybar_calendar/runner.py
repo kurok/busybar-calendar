@@ -66,7 +66,7 @@ class Runner:
         self.sources = list(sources)
         self.now = now
         self._events: dict[str, list[Event]] = {}
-        self._settings: dict[tuple[str, str], tuple[ReminderSettings, StatusSettings]] = {}
+        self._settings: dict[tuple[str, str, str], tuple[ReminderSettings, StatusSettings]] = {}
         self._shown: object = _UNKNOWN
         # The element ids this service last left on the bar; None when unknown.
         self._drawn: frozenset[str] | None = None
@@ -82,7 +82,7 @@ class Runner:
         return [event for events in self._events.values() for event in events]
 
     def settings_for(self, event: Event) -> tuple[ReminderSettings, StatusSettings]:
-        key = (event.calendar.source, event.calendar.name)
+        key = (event.calendar.source, event.calendar.name, event.calendar.id)
         if key not in self._settings:
             self._settings[key] = self.config.settings_for(*key)
         return self._settings[key]

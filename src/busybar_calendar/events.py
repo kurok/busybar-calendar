@@ -34,6 +34,8 @@ class CalendarRef:
     name: str
     # Position in the configuration: a calendar added later wins an overlap.
     order: int
+    # The CalDAV calendar's id (its URL's last segment); empty for an ICS feed.
+    id: str = ""
 
 
 @dataclass(frozen=True)

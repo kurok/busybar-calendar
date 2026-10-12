@@ -54,10 +54,8 @@ Wi-Fi gets `403 Forbidden`, whatever token you send. Over USB
 
 ## Add your calendars
 
-Each `[[sources]]` entry is one CalDAV account or one ICS feed. Run
-`busybar-calendar calendars` to see what a CalDAV account holds, then list
-the ones you want under `include` (default: all of them). When two events
-start at the same time, the calendar listed last wins.
+Each `[[sources]]` entry is one CalDAV account or one ICS feed. A CalDAV
+account uses all of its calendars unless you [filter them](#choosing-calendars).
 
 ### CalDAV
 
@@ -74,13 +72,6 @@ the server supports discovery (`/.well-known/caldav`); otherwise give the
 URL of one calendar, and it is used as it is. Servers that only speak
 Digest auth need `auth = "digest"`.
 
-Organisation accounts often expose shared calendars too. A PrivateEmail
-business mailbox, for example, lists every meeting room and team calendar
-next to your own, and with the default of "all calendars" other people's
-room bookings would reach your bar. List yours under `include`, or use your
-calendar's URL (`https://dav.privateemail.com/dav.php/calendars/<address>/<id>/`,
-as `busybar-calendar calendars` prints it).
-
 ```toml
 [[sources]]
 name = "iCloud"
@@ -92,6 +83,53 @@ include = ["Home", "Work"]
 
 [sources.calendars.Work.status]
 show = "meeting"
+```
+
+### Choosing calendars
+
+`busybar-calendar calendars` lists each calendar on the account with its
+**id** (the last part of its URL) and **name**, and marks the ones in use:
+
+```
+PrivateEmail (caldav): 22 calendars, 1 used
+  * 4711   Doe, Jane
+    5001   Ops Maintenances
+    5002   Infra Maintenances
+    6001   Office - Room 1 (6 people)
+    ...
+```
+
+Two lists filter them. Each entry is a calendar's **name**, its **id**, or
+its **URL**, and may use the wildcards `*` and `?`. Matching is exact and
+case-sensitive.
+
+| | |
+| --- | --- |
+| `include` | Use only these calendars. Without it, all of them. |
+| `exclude` | Leave these out, after `include`. |
+
+```toml
+include = ["Doe, Jane"]                 # by name
+include = ["4711"]                     # by id: survives a rename
+include = ["Doe, Jane", "* Maintenances"]
+exclude = ["Office - Room *", "Room *"]   # everything except the meeting rooms
+```
+
+Organisation accounts often expose shared calendars. A PrivateEmail
+business mailbox, for example, lists every meeting room and team calendar
+next to your own. With no filter, other people's room bookings would reach
+your bar, so name your own calendar under `include`.
+
+Calendars come in the order `include` lists them: when two events start at
+the same time, the calendar listed last wins. An entry that matches nothing
+is reported, by `calendars` and in the service's log.
+
+Per-calendar settings can be keyed by name or by id, and the id wins when
+both are given:
+
+```toml
+[sources.calendars."4711".reminder]
+minutes_before = 10
 ```
 
 Invitations you declined are skipped by matching your attendee address. It

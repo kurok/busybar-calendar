@@ -16,7 +16,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from urllib.parse import urljoin, urlsplit
+from urllib.parse import unquote, urljoin, urlsplit
 from xml.etree.ElementTree import Element
 
 import httpx
@@ -74,6 +74,11 @@ class CalDAVAuthError(CalDAVError):
 class RemoteCalendar:
     url: str
     name: str
+
+    @property
+    def id(self) -> str:
+        """The calendar's own path segment: 4711 in .../calendars/me@example.com/4711/."""
+        return unquote(urlsplit(self.url).path.rstrip("/").rsplit("/", 1)[-1])
 
 
 @dataclass(frozen=True)
