@@ -18,6 +18,7 @@ def ran(monkeypatch):
 
     def fake_run(command, **kwargs):
         calls.append((list(command), kwargs.get("check", False)))
+        return service.subprocess.CompletedProcess(command, 0, "", "")
 
     monkeypatch.setattr(service.subprocess, "run", fake_run)
     return calls
@@ -156,3 +157,13 @@ def test_recent_log_reads_the_tail(tmp_path):
     state = service.Status(True, True, log=log)
     assert service.recent_log(state, 3) == ["line 17", "line 18", "line 19"]
     assert service.recent_log(service.Status(True, True, log=tmp_path / "none"), 3) == []
+
+
+def test_restart_only_an_installed_service(home, ran):
+    assert service.restart("darwin") is False
+    assert ran == []
+    agent = home / "Library/LaunchAgents/app.busybar.calendar.plist"
+    agent.parent.mkdir(parents=True)
+    agent.write_text("<plist/>")
+    service.restart("darwin")
+    assert ran[0][0][:3] == ["launchctl", "kickstart", "-k"]

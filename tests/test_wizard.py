@@ -56,7 +56,7 @@ def test_cloud_and_an_icloud_account(tmp_path):
     assert source.include == ["Home", "Work"]  # in the server's order
     assert store.saved == [
         ("busybar-calendar-bar", "busybar-calendar"),
-        ("busybar-calendar-icloud.com", "me@icloud.com"),
+        ("busybar-calendar-me@icloud.com", "me@icloud.com"),  # one entry per account
     ]
 
 
@@ -112,3 +112,56 @@ def test_an_existing_config_is_kept_unless_confirmed(tmp_path):
     ask = script("y", "3", "2", "https://example.com/a.ics")
     assert wizard.run(path, ask=ask, store=FakeStore(), discover=None) == 0
     assert "keep me" not in path.read_text()
+
+
+EXISTING = """# my config, with my own comments
+[bar]
+address = "10.0.4.20"
+
+[[sources]]
+name = "iCloud"
+type = "caldav"
+url = "https://caldav.icloud.com"
+username = "me@icloud.com"
+password_env = "ICLOUD"
+
+[sources.calendars.Work.status]
+show = "meeting"
+"""
+
+
+def test_add_appends_a_source_and_keeps_the_rest(tmp_path):
+    path = tmp_path / "config.toml"
+    path.write_text(EXISTING)
+    # A second iCloud account: the name must not clash with the first.
+    ask = script("1", "partner@icloud.com", "", "1")
+    store = FakeStore()
+    assert wizard.add(path, ask=ask, store=store, discover=lambda source: FOUND) == 0
+    text = path.read_text()
+    assert text.startswith(EXISTING.rstrip("\n"))  # comments and layout untouched
+    config = load(path)
+    assert [s.name for s in config.sources] == ["iCloud", "iCloud 2"]
+    assert config.sources[1].include == ["Home"]
+    assert config.settings_for("iCloud", "Work")[1].show == "meeting"  # still applies
+    assert store.saved == [("busybar-calendar-partner@icloud.com", "partner@icloud.com")]
+
+
+def test_add_an_ics_link(tmp_path):
+    path = tmp_path / "config.toml"
+    path.write_text(EXISTING)
+    assert (
+        wizard.add(
+            path, ask=script("2", "webcal://example.com/team.ics"), store=FakeStore(), discover=None
+        )
+        == 0
+    )
+    assert load(path).sources[1].url == "https://example.com/team.ics"
+
+
+def test_add_needs_a_config(tmp_path):
+    import pytest
+
+    from busybar_calendar.config import ConfigError
+
+    with pytest.raises(ConfigError, match="busybar-calendar init"):
+        wizard.add(tmp_path / "none.toml", ask=script(), store=FakeStore(), discover=None)

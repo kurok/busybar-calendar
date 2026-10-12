@@ -232,3 +232,14 @@ def recent_log(state: Status, lines: int = 5) -> list[str]:
         check=False,
     )
     return done.stdout.splitlines()[-lines:] if done.returncode == 0 else []
+
+
+def restart(platform: str = sys.platform) -> bool:
+    """Restart an installed service so it reads a changed config; False if none is installed."""
+    if not uninstall_plan(platform).path.exists():
+        return False
+    if platform == "darwin":
+        command = ["launchctl", "kickstart", "-k", f"gui/{os.getuid()}/{LABEL}"]
+    else:
+        command = ["systemctl", "--user", "restart", UNIT]
+    return subprocess.run(command, capture_output=True, check=False).returncode == 0

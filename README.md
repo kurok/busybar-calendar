@@ -91,6 +91,7 @@ git clone https://github.com/kurok/busybar-calendar.git
 cd busybar-calendar
 uv tool install .            # puts busybar-calendar on your PATH
 busybar-calendar init        # a few questions: the bar, the calendar; writes the config
+busybar-calendar add         # another calendar later: the same questions, appended
 busybar-calendar check       # the bar, its token and every calendar, in one go
 busybar-calendar install     # keep it running in the background (launchd / systemd)
 busybar-calendar status      # is it running, what did it last do, what is on the bar next

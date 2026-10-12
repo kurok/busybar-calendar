@@ -24,7 +24,7 @@ from zoneinfo import ZoneInfo
 
 from . import sources
 from .caldav import CalDAVError, RemoteCalendar
-from .config import Config, SourceConfig
+from .config import Config, SourceConfig, load
 
 Ask = Callable[[str], str]
 USB_HOST = "10.0.4.20"
@@ -155,12 +155,21 @@ def ask_bar(ask: Ask, store: SecretStore, answers: Answers) -> None:
     answers.bar_lines.append(secret.toml("token"))
 
 
+def _unique(name: str, taken: frozenset[str]) -> str:
+    number, candidate = 2, name
+    while candidate in taken:
+        candidate, number = f"{name} {number}", number + 1
+    return candidate
+
+
 def ask_calendar(
     ask: Ask,
     store: SecretStore,
     answers: Answers,
     discover: Callable[[SourceConfig], list[RemoteCalendar]],
-) -> None:
+    taken: frozenset[str] = frozenset(),
+) -> str:
+    """Ask for one calendar source, add its lines to `answers`, and return its name."""
     kind = _choose(
         ask,
         "Which calendar?",
@@ -171,8 +180,13 @@ def ask_calendar(
     )
     if kind == 2:
         url = _text(ask, "The link")
-        answers.source_lines += ['name = "Calendar"', 'type = "ics"', f"url = {json.dumps(url)}"]
-        return
+        name = _unique("Calendar", taken)
+        answers.source_lines += [
+            f"name = {json.dumps(name)}",
+            'type = "ics"',
+            f"url = {json.dumps(url)}",
+        ]
+        return name
 
     username = _text(ask, "Your username, usually the email address")
     domain = username.rpartition("@")[2].lower()
@@ -180,8 +194,9 @@ def ask_calendar(
     if url in APP_PASSWORD_NOTE:
         print(APP_PASSWORD_NOTE[url])
     print("The calendar password:")
-    secret = store.save(f"busybar-calendar-{domain or 'caldav'}", username, "CALDAV_PASSWORD")
-    name = SERVER_NAMES.get(url) or domain or "CalDAV"
+    # One Keychain entry per account: two accounts on one domain must not share it.
+    secret = store.save(f"busybar-calendar-{username}", username, "CALDAV_PASSWORD")
+    name = _unique(SERVER_NAMES.get(url) or domain or "CalDAV", taken)
     lines = [
         f"name = {json.dumps(name)}",
         'type = "caldav"',
@@ -201,7 +216,7 @@ def ask_calendar(
         print(f"Could not sign in: {error}")
         print("The config is written anyway; fix it, then run: busybar-calendar check")
         answers.source_lines += lines
-        return
+        return name
     print(f"Signed in: {len(found)} calendars.")
     for number, calendar in enumerate(found, 1):
         print(f"  {number:>2}  {calendar.name}  (id {calendar.id})")
@@ -210,6 +225,7 @@ def ask_calendar(
         names = [found[i - 1].name for i in picked]
         lines.append(f"include = {json.dumps(names, ensure_ascii=False)}")
     answers.source_lines += lines
+    return name
 
 
 def _pick(ask: Ask, count: int) -> list[int]:
@@ -262,4 +278,24 @@ def run(
     path.chmod(0o600)
     print(f"\nWrote {path}.")
     print("Next: busybar-calendar check, then busybar-calendar install to keep it running.")
+    return 0
+
+
+def add(
+    path: Path,
+    *,
+    ask: Ask = input,
+    store: SecretStore | None = None,
+    discover: Callable[[SourceConfig], list[RemoteCalendar]] = _discover,
+) -> int:
+    """Append one more calendar source to an existing config, keeping the rest as it is."""
+    current = load(path)  # also says how to make one, when there is none
+    existing = path.read_text()
+    answers = Answers()
+    taken = frozenset(source.name for source in current.sources)
+    name = ask_calendar(ask, store or SecretStore(), answers, discover, taken)
+    text = existing.rstrip("\n") + "\n\n[[sources]]\n" + "\n".join(answers.source_lines) + "\n"
+    Config.model_validate(tomllib.loads(text))  # the whole file, checked before saving
+    path.write_text(text)
+    print(f"\nAdded {name!r} to {path}. Next: busybar-calendar check")
     return 0

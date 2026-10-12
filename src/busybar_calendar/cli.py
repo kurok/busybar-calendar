@@ -534,6 +534,13 @@ def setup_logging(verbose: bool) -> None:
     logging.getLogger("busylib.client.base").setLevel(logging.CRITICAL)
 
 
+def _restart_after(code: int) -> int:
+    """After the config changed: a running background service reads it only when it starts."""
+    if code == 0 and service.restart():
+        print("Restarted the background service, so it reads the new config.")
+    return code
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="busybar-calendar", description=__doc__)
     parser.add_argument(
@@ -548,6 +555,7 @@ def main(argv: list[str] | None = None) -> int:
     commands.add_parser("run", help="keep the bar in step with the calendars")
     init = commands.add_parser("init", help="answer a few questions to write the config")
     init.add_argument("--force", action="store_true", help="replace an existing config")
+    commands.add_parser("add", help="add another calendar to the config, a few questions")
     commands.add_parser("check", help="check the bar, its token and every calendar")
     commands.add_parser("status", help="is it running, and what is on the bar now and next")
     install = commands.add_parser(
@@ -602,7 +610,9 @@ def main(argv: list[str] | None = None) -> int:
                 or os.environ.get(config_module.CONFIG_ENV)
                 or config_module.search_paths()[-1]
             )
-            return wizard.run(path, overwrite=args.force)
+            return _restart_after(wizard.run(path, overwrite=args.force))
+        if args.command == "add":  # appends to the config
+            return _restart_after(wizard.add(config_module.find(args.config)))
         args.config_path = config_module.find(args.config)
         config = config_module.load(args.config_path)
         return asyncio.run(handlers[args.command](config, args))

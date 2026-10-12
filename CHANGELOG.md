@@ -6,6 +6,19 @@ All notable changes to busybar-calendar. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- `busybar-calendar add`: another calendar source by the same questions as
+  `init`, appended to the config with its comments and layout kept, under a
+  name that does not clash with the others.
+
+### Changed
+
+- After `init` or `add`, an installed background service is restarted, so it
+  reads the new config.
+- `init` and `add` keep each account's password in a Keychain / libsecret
+  entry of its own; two accounts on one domain no longer share one.
+
 ## [0.1.0] - 2026-10-12
 
 The first release.

@@ -70,6 +70,11 @@ Wi-Fi gets `403 Forbidden`, whatever token you send. Over USB
 Each `[[sources]]` entry is one CalDAV account or one ICS feed. A CalDAV
 account uses all of its calendars unless you [filter them](#choosing-calendars).
 
+`busybar-calendar add` adds one more by asking the same questions as `init`,
+and appends it to your config without touching the rest. A background
+service reads the config only when it starts, so `add` and `init` restart
+it when it is installed.
+
 ### CalDAV
 
 | Provider | `url` | Password |
