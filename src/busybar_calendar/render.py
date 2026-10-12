@@ -31,8 +31,15 @@ HIDDEN_TITLE = "Next event"
 CHAR_WIDTH = {"tiny": 4, "small": 4, "global": 6}
 # The countdown is drawn in the 7px superscript font; room for "1:05:00".
 COUNTDOWN_WIDTH = 28
-# Two-line anchors (top_left y, bottom_left y), calibrated in busylib.
-TWO_LINE_Y = {"tiny": (1, 15), "small": (0, 16)}
+# The title's top_left y, calibrated in busylib: small glyphs land on rows 2-6.
+TITLE_TOP_Y = {"tiny": 1, "small": 0}
+# The superscript font sits its digits 4px above the bottom of its box, so a
+# box anchored at y=16 puts them on rows 7-11, into the title's descenders.
+# Anchored at 19 they land on rows 10-14, level with the icon's last row.
+# Measured on firmware 1.2.4 from GET /api/screen.
+COUNTDOWN_BOTTOM_Y = 19
+# Beside an 11px global-font title, centred on the same rows (6-10).
+COUNTDOWN_MID_Y = 9
 SCROLL_RATE = 1200
 SCROLL_START_DELAY = 1500
 SCROLL_REPEAT_DELAY = 2500
@@ -102,14 +109,14 @@ def _titled(
                 direction="time_left",
                 show_hours="when_non_zero",
                 x=WIDTH - 1,
-                y=8,
+                y=COUNTDOWN_MID_Y,
                 align="mid_right",
                 display_until=until,
             )
         )
         return elements
-    top, bottom = TWO_LINE_Y[font]
     available = WIDTH - TEXT_X
+    top = TITLE_TOP_Y[font]
     elements.append(_text("cal_title", title, font, TEXT_X, top, "top_left", available, until))
     elements.append(
         types.CountdownElement(
@@ -118,7 +125,7 @@ def _titled(
             direction="time_left",
             show_hours="when_non_zero",
             x=TEXT_X,
-            y=bottom,
+            y=COUNTDOWN_BOTTOM_Y,
             align="bottom_left",
             display_until=until,
         )

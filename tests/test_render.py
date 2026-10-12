@@ -39,7 +39,7 @@ def test_reminder_two_lines():
     assert title.scroll_rate  # 19 characters do not fit beside the icon
     countdown = elements["cal_time"]
     assert countdown.timestamp == str(int(START.timestamp()))
-    assert (countdown.direction, countdown.align, countdown.y) == ("time_left", "bottom_left", 16)
+    assert (countdown.direction, countdown.align, countdown.y) == ("time_left", "bottom_left", 19)
     # The bar takes the reminder down by itself at the start.
     assert {e.display_until for e in d.elements} == {str(int(START.timestamp()))}
 
@@ -60,7 +60,11 @@ def test_global_font_shares_one_line():
     elements = by_id(drawing(screen(), DisplayConfig(title_font="global"), "a", 91))
     assert elements["cal_title"].text == "Планування спринту"
     assert (elements["cal_title"].align, elements["cal_title"].y) == ("mid_left", 8)
-    assert (elements["cal_time"].align, elements["cal_time"].x) == ("mid_right", 71)
+    assert (elements["cal_time"].align, elements["cal_time"].x, elements["cal_time"].y) == (
+        "mid_right",
+        71,
+        9,
+    )
 
 
 def test_status_name_counts_to_the_end():
