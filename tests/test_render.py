@@ -139,3 +139,13 @@ def test_payload_matches_the_wire_format():
     for element in payload["elements"]:
         assert "timeout" not in element  # mutually exclusive with display_until
         assert element["display_until"].isdigit()
+
+
+def test_titles_are_capped():
+    from busybar_calendar.render import MAX_TITLE
+
+    long = "Quarterly planning " * 300  # 5700 characters
+    for font in ("small", "global"):
+        text = title_text(long, DisplayConfig(title_font=font))
+        assert len(text) <= MAX_TITLE and text.endswith("...")
+    assert title_text("Standup", DisplayConfig()) == "Standup"  # short ones untouched

@@ -6,6 +6,13 @@ All notable changes to busybar-calendar. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- Event titles are capped at 120 characters (a longer one only scrolls
+  longer). A draw request with a title of thousands of characters left a
+  bar's HTTP API hanging, on the LAN and through BUSY Cloud, until the bar
+  was power-cycled.
+
 ## [0.3.0] - 2026-10-12
 
 ### Changed

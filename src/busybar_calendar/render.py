@@ -100,14 +100,23 @@ def _drawable(c: str) -> bool:
     return category[0] != "C" and category != "So" and not "︀" <= c <= "️"
 
 
+# A longer title only scrolls longer; and a draw request carrying a title of
+# thousands of characters left a bar's HTTP API hanging (firmware 1.2.4,
+# reached on the LAN and through BUSY Cloud alike) until it was power-cycled.
+MAX_TITLE = 120
+
+
 def title_text(title: str, display: DisplayConfig) -> str:
-    """The title as the chosen font can draw it."""
+    """The title as the chosen font can draw it, and no longer than MAX_TITLE."""
     title = "".join(" " if c.isspace() else c for c in title if c.isspace() or _drawable(c))
     if display.title_font != "global":
         if display.transliterate:
             title = anyascii(title)
         title = "".join(c for c in title if " " <= c <= "~")
-    return " ".join(title.split()) or "Busy"
+    title = " ".join(title.split()) or "Busy"
+    if len(title) > MAX_TITLE:
+        title = title[: MAX_TITLE - 3].rstrip() + "..."
+    return title
 
 
 def _text(
