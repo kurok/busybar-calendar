@@ -40,8 +40,8 @@ def test_reminder_two_lines():
     countdown = elements["cal_time"]
     assert countdown.timestamp == str(int(START.timestamp()))
     assert (countdown.direction, countdown.align, countdown.y) == ("time_left", "bottom_left", 19)
-    # The bar takes the reminder down by itself at the start.
-    assert {e.display_until for e in d.elements} == {str(int(START.timestamp()))}
+    # The bar takes the reminder down by itself, a grace minute after the start.
+    assert {e.display_until for e in d.elements} == {str(int(START.timestamp()) + 60)}
 
 
 def test_short_title_does_not_scroll_and_hidden_name():
@@ -71,9 +71,9 @@ def test_status_name_counts_to_the_end():
     d = drawing(screen("status"), DisplayConfig(), "a", 91)
     elements = by_id(d)
     assert elements["cal_icon"].stock_path == "shared/animations/calendar_event_16x16.anim"
-    end = str(int(EVENT.end.timestamp()))
-    assert elements["cal_time"].timestamp == end
-    assert {e.display_until for e in d.elements} == {end}
+    end = int(EVENT.end.timestamp())
+    assert elements["cal_time"].timestamp == str(end)
+    assert {e.display_until for e in d.elements} == {str(end + 60)}
 
 
 def test_status_stock_animation():

@@ -28,7 +28,7 @@ this runs today, on a machine of your own.
 These are the bar's own stock animations and sounds. Drawings go in at
 priority 91, above an active BUSY session (90), so like Google events they
 show on top of any status. Each element carries `display_until`, so the bar
-removes it on time even if this service has stopped.
+removes it by itself within a minute even if this service has stopped.
 
 Rules, following the Google integration:
 

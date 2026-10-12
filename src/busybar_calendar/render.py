@@ -6,8 +6,12 @@ animation with the event's title beside it and a countdown to the start; the
 status during an event is the calendar-event animation with the title and a
 countdown to the end, or one of the bar's own 72x16 status animations.
 
-Every element carries `display_until`, so the bar takes the drawing down on
-time by itself, even if this service has stopped.
+Every element carries `display_until`, so the bar takes the drawing down by
+itself even if this service has stopped - a minute after the screen ends
+rather than on the second, because this service redraws or clears the same
+elements right then, and a redraw that lands as the old element expires
+loses its animation on firmware 1.2.4 (measured: 0 of 256 icon pixels lit;
+with the expiry a few seconds later, the icon stays).
 """
 
 from __future__ import annotations
@@ -26,6 +30,8 @@ TEXT_X = ICON + 2
 REMINDER_ANIMATION = "shared/animations/calendar_reminder_16x16.anim"
 EVENT_ANIMATION = "shared/animations/calendar_event_16x16.anim"
 HIDDEN_TITLE = "Next event"
+# How long a drawing outlives its screen if nothing replaces it; see above.
+EXPIRY_GRACE = 60
 
 # Rough glyph advance per font, only to decide whether a line must scroll.
 CHAR_WIDTH = {"tiny": 4, "small": 4, "global": 6}
@@ -134,7 +140,7 @@ def _titled(
 
 
 def elements(screen: Screen, display: DisplayConfig) -> list[types.DisplayElement]:
-    until = str(int(screen.until.timestamp()))
+    until = str(int(screen.until.timestamp()) + EXPIRY_GRACE)
     if screen.kind == "reminder":
         title = (
             title_text(screen.event.title, display) if screen.reminder.show_name else HIDDEN_TITLE
