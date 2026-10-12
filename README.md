@@ -79,6 +79,7 @@ start from [`config.example.toml`](config.example.toml).
 
 | Command | |
 | --- | --- |
+| `busybar-calendar` | Where you stand: the first steps before setup, the status after. |
 | `busybar-calendar status` | Is it running, what did it last log, what is on the bar now and next. |
 | `busybar-calendar check` | The bar, its token and every calendar, with what to fix. |
 | `busybar-calendar add` | Another calendar, by the same questions as `init`. |

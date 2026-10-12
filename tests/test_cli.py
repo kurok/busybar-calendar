@@ -272,3 +272,27 @@ def test_restart(monkeypatch, capsys):
     monkeypatch.setattr(service, "restart", lambda: False)
     assert cli.main(["restart"]) == 1
     assert "Not installed" in capsys.readouterr().out
+
+
+def test_bare_command_suggests_first_steps(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "none"))
+    monkeypatch.delenv("BUSYBAR_CALENDAR_CONFIG", raising=False)
+    monkeypatch.chdir(tmp_path)
+    assert cli.main([]) == 0
+    out = capsys.readouterr().out
+    assert "No config yet" in out and "busybar-calendar init" in out
+
+
+def test_bare_command_shows_status_once_configured(tmp_path, monkeypatch, capsys):
+    config = tmp_path / "config.toml"
+    config.write_text('[[sources]]\nname = "Feed"\ntype = "ics"\nurl = "https://x"\n')
+    seen = []
+
+    async def fake_status(loaded, as_json=False):
+        seen.append(loaded.sources[0].name)
+        return 0
+
+    monkeypatch.setattr(diagnose, "status", fake_status)
+    assert cli.main(["-c", str(config)]) == 0
+    assert seen == ["Feed"]
+    assert "--help lists every command" in capsys.readouterr().out

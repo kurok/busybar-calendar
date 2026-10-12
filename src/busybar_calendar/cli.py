@@ -176,6 +176,31 @@ def setup_logging(verbose: bool) -> None:
     logging.getLogger("busylib.client.base").setLevel(logging.CRITICAL)
 
 
+FIRST_STEPS = """\
+busybar-calendar shows your CalDAV and ICS calendars on a BUSY Bar: a
+reminder before each event, then a red BUSY while it runs.
+
+No config yet. To set it up:
+
+  busybar-calendar init       a few questions: how to reach the bar, which calendar
+  busybar-calendar check      proves it works, or says what to fix
+  busybar-calendar install    runs it in the background from now on
+
+busybar-calendar --help lists every command."""
+
+
+def _where_you_stand(args: argparse.Namespace) -> int:
+    """`busybar-calendar` alone: first steps before a config exists, the status after."""
+    try:
+        config = config_module.load(config_module.find(args.config))
+    except ConfigError:
+        print(FIRST_STEPS)
+        return 0
+    code = asyncio.run(diagnose.status(config))
+    print("\nbusybar-calendar --help lists every command.")
+    return code
+
+
 def _restart_after(code: int) -> int:
     """After the config changed: a running background service reads it only when it starts."""
     if code == 0 and service.restart():
@@ -193,7 +218,8 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("-v", "--verbose", action="store_true")
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
-    commands = parser.add_subparsers(dest="command", required=True)
+    # No command: where you stand, and what to do next (see _where_you_stand).
+    commands = parser.add_subparsers(dest="command")
     commands.add_parser("run", help="keep the bar in step with the calendars")
     init = commands.add_parser("init", help="answer a few questions to write the config")
     init.add_argument("--force", action="store_true", help="replace an existing config")
@@ -247,6 +273,8 @@ def main(argv: list[str] | None = None) -> int:
             return cmd_uninstall(args)
         if args.command == "restart":
             return cmd_restart(args)
+        if args.command is None:
+            return _where_you_stand(args)
         if args.command == "status":  # the service part needs no config
             try:
                 config = config_module.load(config_module.find(args.config))

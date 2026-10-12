@@ -6,6 +6,11 @@ All notable changes to busybar-calendar. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- `busybar-calendar` on its own says where you stand: the first steps before
+  there is a config, the status after, instead of a usage error.
+
 ## [0.2.0] - 2026-10-12
 
 ### Added
