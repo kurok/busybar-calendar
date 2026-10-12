@@ -115,10 +115,14 @@ up things the API description does not say:
   seconds later, the redraw keeps it. So `display_until` is the screen's
   end plus 60 seconds: the service redraws or clears on time anyway, and
   the extra minute only matters if it has stopped.
-- **A draw merges by element id.** Drawing the `meeting` animation after a
-  reminder leaves the reminder's elements underneath. The service clears
-  its own drawing first whenever the next one uses other element ids, and
-  updates in place, without a flicker, when they are the same.
+- **A draw merges by element id.** It updates the ids it names and leaves
+  the others up, so drawing the `meeting` animation after a reminder would
+  leave the reminder's elements underneath. The service clears its own
+  drawing first only when an element would be left over, and otherwise
+  updates in place. A reminder turning into its event only adds BUSY, so
+  that change is seamless: sampling the screen across it, clearing first
+  caught a half-drawn icon (96 of 234 pixels lit) in 1 of 20 frames, and
+  updating in place showed the full icon in all 20.
 - **The screen has one owner.** `DELETE /api/display/draw` with this
   application's name, while another application is on screen, answers
   `400 this application_name is currently not displaying anything`. The

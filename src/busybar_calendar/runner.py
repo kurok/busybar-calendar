@@ -129,13 +129,14 @@ class Runner:
         """
         Put a drawing up in place of the last one.
 
-        A draw merges into what the application already shows, by element id,
-        so a layout with other ids - a status animation after a reminder -
-        would land on top of the old one. Clear first when the ids differ;
-        when they are the same, update in place, which does not flicker.
+        A draw merges into what the application already shows, by element id:
+        it updates the ids it names and leaves the others up. So clear first
+        only when something would be left over - a reminder's elements under
+        a status animation - and otherwise update in place, which does not
+        flicker: a reminder becoming its event only adds BUSY.
         """
         ids = frozenset(element.id for element in drawing.elements)
-        if self._drawn is None or (self._drawn and self._drawn != ids):
+        if self._drawn is None or not self._drawn <= ids:
             await self._clear()
         self._drawn = None  # unknown until the draw is confirmed
         await render.send(self.bar, drawing)

@@ -79,8 +79,7 @@ async def test_full_life_of_an_event():
         CLEAR,  # whatever an earlier run left behind
         TITLED,
         ("sound", "calendar_reminder_ends.snd"),
-        CLEAR,  # the status adds an element, BUSY
-        BUSY,
+        BUSY,  # the reminder's elements plus BUSY: updated in place, no clear, no flicker
         ("sound", "calendar_event_starts.snd"),
         CLEAR,
     ]
@@ -233,3 +232,13 @@ async def test_play_carries_on_when_the_bar_refuses_a_draw(monkeypatch):
     drawn = [c for c in bar.calls if c[0] == "draw"]
     # Second's two screens were refused; First and Third still played in full.
     assert len(drawn) == 4
+
+
+async def test_left_over_elements_are_cleared_first():
+    # A meeting's status, then the next meeting's reminder: BUSY must not stay up.
+    runner, bar, _ = make([meeting(start_min=0, length=60, title="Long"), meeting(start_min=30)])
+    await runner.refresh(at(10))
+    await runner.tick(at(10))
+    await runner.tick(at(26))
+    # (No chime for Long: its status opened ten minutes before the first tick.)
+    assert bar.calls == [CLEAR, BUSY, CLEAR, TITLED, ("sound", "calendar_reminder_ends.snd")]
