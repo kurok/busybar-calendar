@@ -39,3 +39,20 @@ def test_every_option_is_described(model):
 def test_example_config_loads():
     loaded = config.load(ROOT / "config.example.toml")
     assert loaded.sources
+
+
+DOCS = [ROOT / "README.md", ROOT / "CHANGELOG.md", *sorted((ROOT / "docs").glob("*.md"))]
+
+
+@pytest.mark.parametrize("doc", DOCS, ids=lambda path: path.name)
+def test_relative_links_resolve(doc):
+    import re
+
+    targets = re.findall(r"\]\(([^)#\s]+)(?:#[^)]*)?\)", doc.read_text())
+    broken = [
+        target
+        for target in targets
+        if not target.startswith(("http://", "https://", "mailto:"))
+        and not (doc.parent / target).exists()
+    ]
+    assert not broken, f"{doc.name} links to missing files: {broken}"

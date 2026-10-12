@@ -59,79 +59,56 @@ back to whatever it was showing.
 - **No secrets in files**: passwords and tokens come from the environment
   or a command such as the macOS Keychain.
 
-## Quick start
+## Get started
 
-### As a BUSY Bar gallery app
+```sh
+git clone https://github.com/kurok/busybar-calendar.git && cd busybar-calendar
+uv tool install .            # puts busybar-calendar on your PATH
+busybar-calendar init        # a few questions: how to reach the bar, which calendar
+busybar-calendar check       # proves it works, or says what to fix
+busybar-calendar install     # runs it in the background from now on
+```
 
-`app.py` follows the [community gallery](https://github.com/maxswinkels/busybar-apps)
+`init` asks how to reach the bar (BUSY Cloud, Wi-Fi or USB) and which
+calendar to read, keeps the passwords in the macOS Keychain (libsecret on
+Linux), signs in so you can pick calendars, and writes
+`~/.config/busybar-calendar/config.toml`. To write the config yourself,
+start from [`config.example.toml`](config.example.toml).
+
+## Everyday commands
+
+| Command | |
+| --- | --- |
+| `busybar-calendar status` | Is it running, what did it last log, what is on the bar now and next. |
+| `busybar-calendar check` | The bar, its token and every calendar, with what to fix. |
+| `busybar-calendar add` | Another calendar, by the same questions as `init`. |
+| `busybar-calendar restart` | After a new password: the service reads them when it starts. |
+| `busybar-calendar upcoming` | The events the bar will show, and when; tentative ones marked. |
+| `busybar-calendar calendars` | What each CalDAV account has, with ids, for `include`. |
+| `busybar-calendar replay` | Tomorrow's events on the bar, a minute each. |
+| `busybar-calendar demo` | A sample reminder on the bar, to see the look. |
+| `busybar-calendar uninstall` | Stop and remove the background service. |
+
+`status` and `check` also take `--json`, for scripts.
+
+## As a BUSY Bar gallery app
+
+`app.py` follows the [community gallery](https://github.com/maxswinkels/busybar-apps)'s
 conventions: one entrypoint, `--host` (default `10.0.4.20`, the bar over
 USB), secrets from the environment only.
 
 ```sh
 pip install -r requirements.txt
-python app.py                                   # your calendars after `busybar-calendar init`,
-                                                # a demo schedule before
+python app.py                        # the config init wrote; a demo schedule before that
 python app.py --host 192.168.1.50 --ics "https://example.com/work.ics"
-CALDAV_PASSWORD=... python app.py --caldav https://caldav.icloud.com --user me@icloud.com --include Work
-BUSYBAR_TOKEN=... python app.py --cloud --ics "https://example.com/work.ics"   # via BUSY Cloud
-python app.py --config config.toml              # every setting
+CALDAV_PASSWORD=... python app.py --caldav https://caldav.icloud.com --user me@icloud.com
+BUSYBAR_TOKEN=... python app.py --cloud --ics "https://example.com/work.ics"
 ```
 
-`CALDAV_PASSWORD` is the calendar password and `BUSYBAR_TOKEN` the bar's
-HTTP API password (or, with `--cloud`, a BUSY Cloud token). A 401 or 404
-from the calendar stops the app with an error rather than retrying forever.
-The first start after installing the requirements can take several seconds
-on macOS, which checks newly installed libraries once (measured: 8.3 s, then
-0.15 s on every start after).
-
-### As a service
-
-```sh
-git clone https://github.com/kurok/busybar-calendar.git
-cd busybar-calendar
-uv tool install .            # puts busybar-calendar on your PATH
-busybar-calendar init        # a few questions: the bar, the calendar; writes the config
-busybar-calendar add         # another calendar later: the same questions, appended
-busybar-calendar check       # the bar, its token and every calendar, in one go
-busybar-calendar install     # keep it running in the background (launchd / systemd);
-                             # restart it after a new password, uninstall to remove it
-busybar-calendar status      # is it running, what did it last do, what is on the bar next
-                             # (status and check also speak --json, for scripts)
-```
-
-`init` asks how to reach the bar (BUSY Cloud, Wi-Fi or USB) and which
-calendar to read, stores the passwords in the macOS Keychain (or libsecret
-on Linux) with their own prompts, signs in to let you pick calendars, and
-writes `~/.config/busybar-calendar/config.toml`. The config is found there
-on its own (or in `./config.toml`, or wherever `$BUSYBAR_CALENDAR_CONFIG`
-or `-c` points), and you can write it by hand instead. A minimal one:
-
-```toml
-[bar]
-# A BUSY Cloud token with the "BUSY Bar" access scope, read from the Keychain.
-token_command = ["security", "find-generic-password", "-s", "busybar-token", "-w"]
-
-[[sources]]
-name = "iCloud"
-type = "caldav"
-url = "https://caldav.icloud.com"
-username = "me@icloud.com"
-password_command = ["security", "find-generic-password", "-s", "busybar-icloud", "-w"]
-```
-
-More to look at:
-
-```sh
-busybar-calendar calendars   # the calendars each CalDAV account has, with ids
-busybar-calendar upcoming    # what the bar will show, and when
-busybar-calendar demo        # draw a sample reminder for 20 seconds
-busybar-calendar replay      # play tomorrow's events on the bar, a minute each
-busybar-calendar run         # keep the bar in step with your calendars, in the foreground
-```
-
-[docs/setup.md](docs/setup.md) covers connecting the bar (cloud token or LAN
-password), the URLs for each calendar provider, storing secrets, and
-running it in the background or in Docker.
+`CALDAV_PASSWORD` is the calendar's password, `BUSYBAR_TOKEN` the bar's HTTP
+API password or, with `--cloud`, a BUSY Cloud token. On macOS the first
+start after installing the requirements takes a few seconds while the system
+checks the new libraries; later starts take a fraction of a second.
 
 ## Settings
 
@@ -149,15 +126,13 @@ The per-calendar settings are the Google Calendar integration's:
 | *(not in Google's)* Busy status for events you marked tentative | `status.tentative` (default on) |
 
 They layer: `[defaults]` for every calendar, then per source, then per
-calendar (`[sources.calendars."Work".reminder]`). Setting a default once is
-the account-level setting BUSY Cloud does not have yet
+calendar (`[sources.calendars."Work".reminder]`); a default set once is the
+account-level setting BUSY Cloud does not have yet
 ([busybar-firmware#1083](https://github.com/busy-app/busybar-firmware/issues/1083)).
+`[display]` sets the look: the icons (`red_calendar` or the bar's own
+`animation`) and the word beside the countdown (`busy_label`, `busy_color`).
 Every option, with its default, is in the
-[configuration reference](docs/configuration.md);
-[`config.example.toml`](config.example.toml) shows the common ones together.
-`[display]` sets the look: the icons (`event_icon`, `reminder_icon`:
-`red_calendar` or the bar's own `animation`) and the word beside the
-countdown during an event (`busy_label`, `busy_color`).
+[configuration reference](docs/configuration.md).
 
 ## Documentation
 
