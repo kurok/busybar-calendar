@@ -89,7 +89,8 @@ start from [`config.example.toml`](config.example.toml).
 | `busybar-calendar demo` | A sample reminder on the bar, to see the look. |
 | `busybar-calendar uninstall` | Stop and remove the background service. |
 
-`status` and `check` also take `--json`, for scripts.
+`status` and `check` also take `--json`, for scripts. A newer version is
+`uv tool upgrade busybar-calendar && busybar-calendar restart`.
 
 ## As a BUSY Bar gallery app
 

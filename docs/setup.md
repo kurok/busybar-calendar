@@ -289,15 +289,17 @@ busybar-calendar check --json | jq '.findings[] | select(.ok | not) | .message'
 
 ### Upgrading
 
-Install the new version over the old one, then restart the service, which
-keeps running the old one until then:
+Upgrade the install, then restart the service, which keeps running the old
+version until then:
 
 ```sh
-uv tool install --force git+https://github.com/kurok/busybar-calendar   # or @v0.3.1 for a release
+uv tool upgrade busybar-calendar   # fetches the newest from git, for the command and the service
 busybar-calendar restart
 ```
 
-From a clone, `git pull && uv tool install --force .` does the same. Your
+That works for the one-line install from git. An install from a clone takes
+`git pull && uv tool install --force .`, and one from a release file or a
+tag (`...@v0.3.1`) takes `uv tool install --force` with the new one. Your
 config and passwords stay where they are.
 
 `status` shows which version the service runs, and says when it is not the
@@ -314,8 +316,11 @@ again, so `status` names the install to upgrade instead:
 
 ```
           that is 0.3.0, from ~/.local/share/uv/tools/busybar-calendar, not this 0.3.1:
-          upgrade that one, then `busybar-calendar restart`
+          `uv tool upgrade busybar-calendar`, then `busybar-calendar restart`
 ```
+
+It gives the `uv tool upgrade` command when that install is a uv tool from
+git, and says "upgrade that one" otherwise.
 
 ### Docker
 

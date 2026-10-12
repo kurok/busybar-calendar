@@ -7,6 +7,7 @@ import contextlib
 import json
 import logging
 import sys
+import tomllib
 from collections.abc import Callable, Iterator
 from datetime import UTC, datetime, timedelta, tzinfo
 from pathlib import Path
@@ -275,6 +276,18 @@ def _environment(python: str) -> str:
     return str(folder)
 
 
+def upgrade_command(python: str) -> str | None:
+    """`uv tool upgrade` for a uv tool installed from git, the install it can move forward.
+
+    A tool installed from a wheel file would reinstall that same file.
+    """
+    receipt = Path(python).parent.parent / "uv-receipt.toml"
+    with contextlib.suppress(OSError, ValueError, LookupError, TypeError):
+        if "git" in tomllib.loads(receipt.read_text())["tool"]["requirements"][0]:
+            return "uv tool upgrade busybar-calendar"
+    return None
+
+
 def print_status(data: dict) -> None:
     print(f"busybar-calendar {data['version']}")
     svc = data["service"]
@@ -290,7 +303,9 @@ def print_status(data: dict) -> None:
                     f"          that is {running}, from {_environment(python)}, "
                     f"not this {data['version']}:"
                 )
-                print("          upgrade that one, then `busybar-calendar restart`")
+                command = upgrade_command(python)
+                how = f"`{command}`" if command else "upgrade that one"
+                print(f"          {how}, then `busybar-calendar restart`")
             else:
                 print(
                     f"          that is {running}, but this is {data['version']}: "

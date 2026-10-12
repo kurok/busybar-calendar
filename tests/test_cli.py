@@ -396,6 +396,26 @@ async def test_status_names_the_install_the_service_runs_from(monkeypatch, capsy
     assert "runs this one" not in out
 
 
+def test_upgrade_command_only_for_a_uv_tool_from_git(tmp_path):
+    tool = tmp_path / "tools" / "busybar-calendar"
+    (tool / "bin").mkdir(parents=True)
+    python = str(tool / "bin" / "python")
+    assert diagnose.upgrade_command(python) is None  # not a uv tool
+    receipt = tool / "uv-receipt.toml"
+    receipt.write_text(
+        '[tool]\nrequirements = [{ name = "busybar-calendar", '
+        'git = "https://github.com/kurok/busybar-calendar" }]\n'
+    )
+    assert diagnose.upgrade_command(python) == "uv tool upgrade busybar-calendar"
+    # From a wheel file, `uv tool upgrade` would reinstall the same version.
+    receipt.write_text(
+        '[tool]\nrequirements = [{ name = "busybar-calendar", path = "/d/x-0.3.0.whl" }]\n'
+    )
+    assert diagnose.upgrade_command(python) is None
+    receipt.write_text("not toml [")
+    assert diagnose.upgrade_command(python) is None
+
+
 async def test_status_quiet_when_versions_match(monkeypatch, capsys, tmp_path):
     from busybar_calendar import __version__, service
 
