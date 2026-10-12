@@ -11,6 +11,9 @@ All notable changes to busybar-calendar. The format follows
 - `busybar-calendar add`: another calendar source by the same questions as
   `init`, appended to the config with its comments and layout kept, under a
   name that does not clash with the others.
+- `--json` for `status` and `check`: the service, the screen now and next,
+  and each check's finding with its fields (firmware, calendars, next event),
+  with times in ISO 8601.
 
 ### Changed
 

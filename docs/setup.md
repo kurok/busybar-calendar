@@ -273,6 +273,14 @@ Calendar  now status: Design review, until Tue 13 Oct 17:30 (in 44m)
 
 A stopped service shows its last exit code, with the log lines that explain it.
 
+Both `status` and `check` take `--json`, for scripts, dashboards or a menu-bar
+widget. `check --json` exits non-zero when something fails, like `check`:
+
+```sh
+busybar-calendar status --json | jq -r '.calendar.next | "\(.kind) \(.title) at \(.at)"'
+busybar-calendar check --json | jq '.findings[] | select(.ok | not) | .message'
+```
+
 ### Docker
 
 ```sh

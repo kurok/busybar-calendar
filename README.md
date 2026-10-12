@@ -95,6 +95,7 @@ busybar-calendar add         # another calendar later: the same questions, appen
 busybar-calendar check       # the bar, its token and every calendar, in one go
 busybar-calendar install     # keep it running in the background (launchd / systemd)
 busybar-calendar status      # is it running, what did it last do, what is on the bar next
+                             # (status and check also speak --json, for scripts)
 ```
 
 `init` asks how to reach the bar (BUSY Cloud, Wi-Fi or USB) and which

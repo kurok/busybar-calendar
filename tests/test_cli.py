@@ -150,3 +150,67 @@ def test_version(capsys):
     assert done.value.code == 0
     assert capsys.readouterr().out.strip() == f"busybar-calendar {__version__}"
     assert __version__[0].isdigit()  # read from the installed package
+
+
+async def test_check_as_json(monkeypatch, capsys):
+    import argparse
+    import json
+
+    config = Config.model_validate(SOURCES)
+    monkeypatch.setattr(cli, "_bar", lambda _config: FakeBar())
+    monkeypatch.setattr(cli, "_sources", lambda _config: [FakeSource()])
+    code = await cli.cmd_check(config, argparse.Namespace(json=True))
+    result = json.loads(capsys.readouterr().out)  # nothing else on stdout
+    assert code == 0
+    assert result["ok"] is True
+    bar, calendar = result["findings"]
+    assert (bar["area"], bar["firmware"], bar["api"]) == ("bar", "1.2.4", "27.5.0")
+    assert (calendar["area"], calendar["source"], calendar["events"]) == ("calendar", "Feed", 0)
+
+
+async def test_status_as_json(monkeypatch, capsys):
+    import argparse
+    import json
+    from datetime import UTC, datetime, timedelta
+
+    from busybar_calendar import service
+    from busybar_calendar.events import CalendarRef, Event
+
+    monkeypatch.setattr(
+        service, "status", lambda: service.Status(True, False, detail="last exit code 1")
+    )
+    monkeypatch.setattr(service, "recent_log", lambda state: ["Feed: 401, check the credentials"])
+    now = datetime.now(UTC)
+    later = Event(
+        "b",
+        "Retro",
+        now + timedelta(hours=2),
+        now + timedelta(hours=3),
+        CalendarRef("Feed", "Feed", 0),
+        "tentative",
+    )
+
+    class Source:
+        name = "Feed"
+
+        async def fetch(self, start, end):
+            return [later]
+
+        async def aclose(self):
+            pass
+
+    monkeypatch.setattr(cli, "_sources", lambda config: [Source()])
+    await cli.cmd_status(Config.model_validate(SOURCES), argparse.Namespace(json=True))
+    data = json.loads(capsys.readouterr().out)
+    assert data["service"] == {
+        "installed": True,
+        "running": False,
+        "pid": None,
+        "detail": "last exit code 1",
+        "log": None,
+        "recent_log": ["Feed: 401, check the credentials"],
+    }
+    assert data["calendar"]["now"] is None
+    nxt = data["calendar"]["next"]
+    assert (nxt["kind"], nxt["title"], nxt["response"]) == ("reminder", "Retro", "tentative")
+    assert datetime.fromisoformat(nxt["at"]) < datetime.fromisoformat(nxt["start"])
