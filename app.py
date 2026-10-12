@@ -11,6 +11,8 @@ link (Outlook "Publish a calendar", Google's secret iCal address).
     python app.py --ics https://example.com/work.ics
     python app.py --caldav https://caldav.icloud.com --user me@icloud.com --include Work
     python app.py --config config.toml             # every setting: see config.example.toml
+                                                   # (without flags, the config that
+                                                   # `busybar-calendar init` wrote is used)
     python app.py --test                           # draw one frame of an event and exit
 
 Secrets come from the environment, never the command line or this file:
@@ -28,14 +30,20 @@ events nothing is drawn, so the bar is never held.
 import argparse
 import asyncio
 import os
+import signal
 import sys
 from pathlib import Path
+
+# Ctrl-C before the app is up ends it quietly. The first start after an install
+# can take seconds while the system checks the newly installed libraries; once
+# running, every mode handles SIGINT itself and clears the bar on the way out.
+signal.signal(signal.SIGINT, lambda *_: sys.exit(0))
 
 # The app's code lives in src/busybar_calendar, next to this file.
 sys.path.insert(0, str(Path(__file__).resolve().parent / "src"))
 
-from busybar_calendar import cli
-from busybar_calendar.config import Config, ConfigError, load
+from busybar_calendar import cli  # noqa: E402 - after the SIGINT handler and sys.path
+from busybar_calendar.config import Config, ConfigError, find, load  # noqa: E402
 
 APP = "busybar-calendar"
 USB_HOST = "10.0.4.20"
@@ -72,9 +80,23 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     return p.parse_args(argv)
 
 
-def build_config(args: argparse.Namespace) -> Config:
+def config_file(args: argparse.Namespace) -> Path | None:
+    """The config to use: --config, else - unless calendars are given as flags - the one
+    `busybar-calendar init` wrote ($BUSYBAR_CALENDAR_CONFIG, ./config.toml or
+    ~/.config/busybar-calendar/config.toml), else none."""
     if args.config:
-        config = load(args.config)
+        return Path(args.config)
+    if args.ics or args.caldav:
+        return None
+    try:
+        return find()
+    except ConfigError:
+        return None
+
+
+def build_config(args: argparse.Namespace, path: Path | None) -> Config:
+    if path is not None:
+        config = load(path)
         if args.host:
             config.bar.address = args.host
         return config
@@ -120,17 +142,23 @@ def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     cli.setup_logging(args.verbose)
     try:
-        config = build_config(args)
+        path = config_file(args)
+        config = build_config(args, path)
         if args.test:
             return asyncio.run(cli.draw_test_frame(config))
         if args.demo or not config.sources:
             if not args.demo:
                 print(
-                    "No calendar given (--ics, --caldav or --config): playing a demo schedule.",
+                    "No calendar yet (--ics, --caldav, or a config from `busybar-calendar "
+                    "init`): playing a demo schedule.",
                     file=sys.stderr,
                 )
             return asyncio.run(cli.run_demo(config))
-        print(f"{APP} -> {config.bar.address or 'BUSY Cloud'}  (Ctrl-C to stop)", file=sys.stderr)
+        where = config.bar.address or "BUSY Cloud"
+        print(
+            f"{APP} -> {where}{f', config {path}' if path else ''}  (Ctrl-C to stop)",
+            file=sys.stderr,
+        )
         return asyncio.run(cli.run_service(config))
     except (ConfigError, ValueError, OSError) as error:
         print(f"{APP}: {error}", file=sys.stderr)

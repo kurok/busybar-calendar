@@ -69,7 +69,8 @@ USB), secrets from the environment only.
 
 ```sh
 pip install -r requirements.txt
-python app.py                                   # a demo schedule, to see it
+python app.py                                   # your calendars after `busybar-calendar init`,
+                                                # a demo schedule before
 python app.py --host 192.168.1.50 --ics "https://example.com/work.ics"
 CALDAV_PASSWORD=... python app.py --caldav https://caldav.icloud.com --user me@icloud.com --include Work
 BUSYBAR_TOKEN=... python app.py --cloud --ics "https://example.com/work.ics"   # via BUSY Cloud
@@ -79,6 +80,9 @@ python app.py --config config.toml              # every setting
 `CALDAV_PASSWORD` is the calendar password and `BUSYBAR_TOKEN` the bar's
 HTTP API password (or, with `--cloud`, a BUSY Cloud token). A 401 or 404
 from the calendar stops the app with an error rather than retrying forever.
+The first start after installing the requirements can take several seconds
+on macOS, which checks newly installed libraries once (measured: 8.3 s, then
+0.15 s on every start after).
 
 ### As a service
 

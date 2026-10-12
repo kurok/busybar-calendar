@@ -273,12 +273,14 @@ def find(explicit: str | Path | None = None) -> Path:
             return path
     tried = ", ".join(str(path) for path in search_paths())
     raise ConfigError(
-        f"no config found (tried {tried}): copy config.example.toml to one of them, "
+        f"no config yet (looked for {tried}): run `busybar-calendar init` to write one, "
         f"or name one with -c or ${CONFIG_ENV}"
     )
 
 
 def load(path: str | Path) -> Config:
+    if not Path(path).is_file():
+        raise ConfigError(f"{path}: no such config; `busybar-calendar init` writes one")
     with open(path, "rb") as handle:
         data = tomllib.load(handle)
     config = Config.model_validate(data)

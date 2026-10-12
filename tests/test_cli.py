@@ -31,7 +31,7 @@ def test_find_says_where_it_looked(tmp_path, monkeypatch):
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "none"))
     monkeypatch.delenv(CONFIG_ENV, raising=False)
     monkeypatch.chdir(tmp_path)
-    with pytest.raises(ConfigError, match=r"config\.example\.toml"):
+    with pytest.raises(ConfigError, match="busybar-calendar init"):
         find()
 
 
@@ -88,3 +88,10 @@ async def test_check_explains_a_refused_lan_call(monkeypatch, capsys):
 
     code, out = await check(monkeypatch, capsys, FakeBar(refuse=403, mode="key"), lan)
     assert "43 characters" in out and "cloud token" in out
+
+
+def test_a_missing_config_says_how_to_make_one(tmp_path):
+    from busybar_calendar.config import load
+
+    with pytest.raises(ConfigError, match="busybar-calendar init"):
+        load(tmp_path / "nope.toml")
