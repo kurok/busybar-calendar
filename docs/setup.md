@@ -174,7 +174,10 @@ type = "ics"
 url = "https://outlook.office365.com/owa/calendar/.../calendar.ics"
 ```
 
-A feed is only as fresh as the provider makes it. Outlook and Google can
+A published feed leaves out who is invited, so your own answer to an invitation
+is not in it; an event the feed marks tentative (Outlook does, as its busy
+status) still counts as tentative. Outlook's Windows timezone names are
+understood. A feed is only as fresh as the provider makes it. Outlook and Google can
 take a while to republish a change, while CalDAV sees it on the next poll
 (`poll_minutes`, default 5).
 

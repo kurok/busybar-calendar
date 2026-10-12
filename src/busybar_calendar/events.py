@@ -74,20 +74,28 @@ def _address(value: object) -> str:
     return str(value).lower().removeprefix("mailto:")
 
 
+def _marked(component: icalendar.Event) -> str:
+    """How sure the event itself says it is: Outlook's busy status, or STATUS."""
+    busy = str(component.get("X-MICROSOFT-CDO-BUSYSTATUS", "")).upper()
+    status = str(component.get("STATUS", "")).upper()
+    return "tentative" if "TENTATIVE" in (busy, status) else "accepted"
+
+
 def _response(component: icalendar.Event, emails: Iterable[str]) -> str | None:
     """
     Your answer to this event, or None when you are not going.
 
-    Your own attendee entry decides, even on an event you organise. An event
-    with no attendees is your own, so accepted. Without your address there is
-    no telling, so every event counts as accepted.
+    Your own attendee entry decides, even on an event you organise. Without
+    one to read - an event of your own, a published feed (which leaves the
+    attendees out), or no address of yours to look for - the event's own
+    marking does: tentative when it says so, accepted otherwise.
     """
     mine = {email.lower() for email in emails}
     attendees = component.get("ATTENDEE", [])
     if not isinstance(attendees, list):
         attendees = [attendees]
     if not attendees or not mine:
-        return "accepted"
+        return _marked(component)
     for attendee in attendees:
         if _address(attendee) in mine:
             # RFC 5545: an attendee without PARTSTAT has not answered.

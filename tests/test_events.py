@@ -138,3 +138,82 @@ def test_response_without_my_entry():
     assert responses(other, organizer="me@example.com") == "accepted"
     assert responses(other, organizer="boss@example.com") == "needs-action"  # via a group
     assert responses(other, emails=[]) == "accepted"  # no address to tell by
+
+
+# Shapes of the published feeds the docs promise to read.
+OUTLOOK_FEED = """BEGIN:VCALENDAR
+METHOD:PUBLISH
+PRODID:Microsoft Exchange Server 2010
+VERSION:2.0
+BEGIN:VTIMEZONE
+TZID:W. Europe Standard Time
+BEGIN:STANDARD
+DTSTART:16010101T030000
+TZOFFSETFROM:+0200
+TZOFFSETTO:+0100
+RRULE:FREQ=YEARLY;INTERVAL=1;BYDAY=-1SU;BYMONTH=10
+END:STANDARD
+BEGIN:DAYLIGHT
+DTSTART:16010101T020000
+TZOFFSETFROM:+0100
+TZOFFSETTO:+0200
+RRULE:FREQ=YEARLY;INTERVAL=1;BYDAY=-1SU;BYMONTH=3
+END:DAYLIGHT
+END:VTIMEZONE
+BEGIN:VEVENT
+UID:040000008200E00074C5B7101A82E008
+SUMMARY:Weekly planning
+DTSTART;TZID=W. Europe Standard Time:20261013T100000
+DTEND;TZID=W. Europe Standard Time:20261013T110000
+RRULE:FREQ=WEEKLY;BYDAY=TU
+END:VEVENT
+END:VCALENDAR
+"""
+
+GOOGLE_FEED = """BEGIN:VCALENDAR
+PRODID:-//Google Inc//Google Calendar 70.9054//EN
+VERSION:2.0
+X-WR-TIMEZONE:Europe/Kyiv
+BEGIN:VEVENT
+DTSTART:20261013T060000Z
+DTEND:20261013T063000Z
+UID:abc123@google.com
+SUMMARY:Standup
+STATUS:CONFIRMED
+TRANSP:OPAQUE
+END:VEVENT
+END:VCALENDAR
+"""
+
+
+def test_outlook_windows_timezones_across_the_dst_change():
+    data = OUTLOOK_FEED.replace("\n", "\r\n")
+    window = (datetime(2026, 10, 12, tzinfo=UTC), datetime(2026, 11, 4, tzinfo=UTC))
+    # The fallback zone is wrong on purpose: the feed's own VTIMEZONE must win.
+    events = parse(data, REF, *window, floating_tz=ZoneInfo("America/New_York"))
+    berlin = ZoneInfo("Europe/Berlin")
+    assert [e.start.astimezone(berlin).strftime("%d %H:%M") for e in events] == [
+        "13 10:00",
+        "20 10:00",
+        "27 10:00",
+        "03 10:00",  # 10:00 local, before and after DST
+    ]
+    assert [e.start.hour for e in events] == [8, 8, 9, 9]  # in UTC
+
+
+def test_google_secret_address_feed():
+    [event] = run(GOOGLE_FEED.replace("\n", "\r\n"))
+    assert (event.title, event.start) == ("Standup", datetime(2026, 10, 13, 6, 0, tzinfo=UTC))
+
+
+def test_tentative_marking_counts_when_there_is_no_attendee_entry():
+    outlook = "X-MICROSOFT-CDO-BUSYSTATUS:TENTATIVE"
+    status = "STATUS:TENTATIVE"
+    busy = "X-MICROSOFT-CDO-BUSYSTATUS:BUSY"
+    assert responses(outlook) == "tentative"  # a published Outlook feed
+    assert responses(status) == "tentative"
+    assert responses(busy) == "accepted"
+    assert responses(outlook, emails=[]) == "tentative"  # no address of mine to look for
+    # My own attendee entry still decides when there is one.
+    mine = "ATTENDEE;PARTSTAT=ACCEPTED:mailto:me@example.com"
+    assert responses(mine, status) == "accepted"

@@ -62,7 +62,9 @@ until the start, and a **status** runs from the start to the end.
      your own, with no attendees, count as accepted. Your response is your
      own attendee entry's `PARTSTAT`, found by your address (`emails`, which
      defaults to the CalDAV username), and it counts even on events you
-     organise;
+     organise. Published feeds leave the attendees out; there the event's
+     own marking counts instead, Outlook's `X-MICROSOFT-CDO-BUSYSTATUS:TENTATIVE`
+     or `STATUS:TENTATIVE`;
   2. then the event starting latest, the Google integration's rule ("the
      newest event and the most recently added calendar take priority"), so
      a reminder for your next meeting replaces the status of the one still
