@@ -47,16 +47,22 @@ reminder on top of a BUSY session or the clock the way the integration does.
 Each event can open two screens. A **reminder** runs from `minutes_before`
 until the start, and a **status** runs from the start to the end.
 
-- When several screens are due at once, the one for the event starting
-  latest wins, and among events starting together, the calendar configured
-  last wins. This is the Google integration's rule ("the newest event and
-  the most recently added calendar take priority"). It means a reminder for
-  your next meeting replaces the status of the one still running.
+- When several screens are due at once:
+  1. **your response decides first**: an event you accepted beats one you
+     marked tentative, which beats one you have not answered. Events of
+     your own, with no attendees, count as accepted. Your response is your
+     own attendee entry's `PARTSTAT`, found by your address (`emails`, which
+     defaults to the CalDAV username), and it counts even on events you
+     organise;
+  2. then the event starting latest, the Google integration's rule ("the
+     newest event and the most recently added calendar take priority"), so
+     a reminder for your next meeting replaces the status of the one still
+     running, as long as you are as sure to attend the next one;
+  3. then the calendar configured last.
 - Like Google: events of 24 hours or more, and all-day events, are not
   shown.
 - Also skipped: `STATUS:CANCELLED`, `TRANSP:TRANSPARENT` (free) unless
-  `skip_free = false`, and invitations where your attendee entry says
-  `PARTSTAT=DECLINED`.
+  `skip_free = false`, and invitations you declined or delegated.
 - A sound plays when a screen opens, but not when the service starts in
   the middle of one: restarting during a meeting does not chime again.
 

@@ -74,3 +74,44 @@ def test_next_change():
     assert next_change(at(10), events, s) == at(40)
     assert next_change(at(40), events, s) == at(110)
     assert next_change(at(200), events, s) is None
+
+
+def answered(title, start_min, length_min, response, calendar=WORK):
+    start = T0 + timedelta(minutes=start_min)
+    end = start + timedelta(minutes=length_min)
+    return Event(title, title, start, end, calendar, response)
+
+
+def test_accepted_beats_tentative_whichever_is_newer():
+    # Tentative, newer: the accepted meeting keeps the bar.
+    events = [answered("Accepted", 0, 60, "accepted"), answered("Maybe", 30, 30, "tentative")]
+    assert choose(at(26), events, settings()).event.title == "Accepted"  # no reminder for Maybe
+    assert choose(at(40), events, settings()).event.title == "Accepted"
+    # Accepted, newer: it wins, as it would anyway.
+    events = [answered("Maybe", 0, 60, "tentative"), answered("Accepted", 30, 30, "accepted")]
+    assert (
+        choose(at(26), events, settings()).kind,
+        choose(at(26), events, settings()).event.title,
+    ) == (
+        "reminder",
+        "Accepted",
+    )
+    assert choose(at(40), events, settings()).event.title == "Accepted"
+    assert choose(at(61), events, settings()) is None
+
+
+def test_same_start_accepted_wins_over_calendar_order():
+    events = [
+        answered("Focus time", 0, 115, "tentative", calendar=HOME),
+        answered("Sync with assistant", 0, 25, "accepted", calendar=WORK),
+    ]
+    assert choose(at(1), events, settings()).event.title == "Sync with assistant"
+    # Once it ends, the tentative one is all that is left.
+    assert choose(at(26), events, settings()).event.title == "Focus time"
+
+
+def test_tentative_beats_unanswered_and_ties_fall_back_to_newest():
+    events = [answered("No reply", 0, 60, "needs-action"), answered("Maybe", 10, 30, "tentative")]
+    assert choose(at(20), events, settings()).event.title == "Maybe"
+    events = [answered("Maybe A", 0, 60, "tentative"), answered("Maybe B", 30, 30, "tentative")]
+    assert choose(at(40), events, settings()).event.title == "Maybe B"

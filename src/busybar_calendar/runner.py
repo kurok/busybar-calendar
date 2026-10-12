@@ -119,6 +119,9 @@ class Runner:
                 raise
         self._drawn = frozenset()
 
+    async def clear(self) -> None:
+        await self._clear()
+
     async def _draw(self, drawing: types.DisplayElements) -> None:
         """
         Put a drawing up in place of the last one.
@@ -135,6 +138,27 @@ class Runner:
         await self.bar.display_draw(drawing)
         self._drawn = ids
 
+    async def show(self, screen: schedule.Screen, *, chime: bool) -> None:
+        """Put a screen on the bar, with its sound if `chime` and its settings want one."""
+        await self._draw(
+            render.drawing(screen, self.config.display, self.app, self.config.bar.priority)
+        )
+        logger.info(
+            "%s: %s (%s, %s) until %s",
+            screen.kind,
+            screen.event.title,
+            screen.event.calendar.name,
+            screen.event.response,
+            screen.until.isoformat(),
+        )
+        sound = render.sound(screen, self.config.display) if chime else None
+        if sound is None:
+            return
+        try:
+            await self.bar.audio_play(stock_path=sound, application_name=self.app)
+        except Exception as error:  # a missing sound is not worth a redraw
+            logger.warning("could not play %s: %s", sound, error)
+
     async def tick(self, now: datetime) -> None:
         screen = schedule.choose(now, self.events, self.settings_for)
         key = screen.key if screen is not None else None
@@ -145,36 +169,17 @@ class Runner:
                 await self._clear()
                 logger.info("cleared")
             else:
-                drawing = render.drawing(
-                    screen, self.config.display, self.app, self.config.bar.priority
-                )
-                await self._draw(drawing)
-                logger.info(
-                    "%s: %s (%s) until %s",
-                    screen.kind,
-                    screen.event.title,
-                    screen.event.calendar.name,
-                    screen.until.isoformat(),
-                )
-                await self._chime(screen, now)
+                # Chime once per screen, and only one that has just opened:
+                # restarting in the middle of a meeting must not chime again.
+                moment = (screen.kind, screen.event.key)
+                fresh = now - self._opened_at(screen) <= SOUND_GRACE
+                await self.show(screen, chime=fresh and moment not in self._sounded)
+                self._sounded.add(moment)
             self._shown = key
         except Exception as error:
             logger.warning("bar refused the update (%s); retrying", error)
             self._shown = _UNKNOWN
             self._drawn = None
-
-    async def _chime(self, screen: schedule.Screen, now: datetime) -> None:
-        moment = (screen.kind, screen.event.key)
-        if moment in self._sounded:
-            return
-        self._sounded.add(moment)
-        sound = render.sound(screen, self.config.display)
-        if sound is None or now - self._opened_at(screen) > SOUND_GRACE:
-            return
-        try:
-            await self.bar.audio_play(stock_path=sound, application_name=self.app)
-        except Exception as error:  # a missing sound is not worth a redraw
-            logger.warning("could not play %s: %s", sound, error)
 
     async def run(self, stop: asyncio.Event) -> None:
         try:

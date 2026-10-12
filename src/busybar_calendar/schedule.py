@@ -2,10 +2,14 @@
 What the bar should show at a given moment, and when that next changes.
 
 Each event can put up two screens: a reminder from `minutes_before` until it
-starts, then its status until it ends. When several want the bar at once,
-the rule is the Google Calendar integration's: the newest event wins, and
-between events starting together, the calendar added last. A reminder for
-the next meeting therefore replaces the status of the one still running.
+starts, then its status until it ends. When several want the bar at once:
+
+1. the event you are surest to attend wins: accepted, then tentative, then
+   not answered yet;
+2. between those, the newest event, as in the Google Calendar integration -
+   so a reminder for your next meeting replaces the status of the one still
+   running;
+3. between events starting together, the calendar configured last.
 """
 
 from __future__ import annotations
@@ -16,7 +20,7 @@ from datetime import datetime, timedelta
 from typing import Literal
 
 from .config import ReminderSettings, StatusSettings
-from .events import Event
+from .events import RESPONSE_RANK, Event
 
 SettingsFor = Callable[[Event], tuple[ReminderSettings, StatusSettings]]
 
@@ -60,7 +64,7 @@ def choose(now: datetime, events: Iterable[Event], settings_for: SettingsFor) ->
             screen = Screen("reminder", event, reminder, status)
         else:
             continue
-        rank = (event.start, event.calendar.order, event.key)
+        rank = (RESPONSE_RANK[event.response], event.start, event.calendar.order, event.key)
         if best_rank is None or rank > best_rank:
             best, best_rank = screen, rank
     return best

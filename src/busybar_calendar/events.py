@@ -9,7 +9,9 @@ how well they implement CalDAV's `expand`.
 
 The filtering follows the Google Calendar integration: events of 24 hours or
 more are not shown, and neither are cancelled ones. Free events and
-invitations you declined are skipped too, since neither makes you busy.
+invitations you declined or delegated are skipped too, since none of them
+makes you busy. Your answer to the rest (accepted, tentative, not yet) is
+kept, because it decides which of two overlapping events the bar shows.
 """
 
 from __future__ import annotations
@@ -45,6 +47,9 @@ class Event:
     start: datetime
     end: datetime
     calendar: CalendarRef
+    # Your answer to the invitation: "accepted", "tentative" or "needs-action".
+    # Events of your own, with no attendees, count as accepted.
+    response: str = "accepted"
 
     @property
     def key(self) -> str:
@@ -58,18 +63,42 @@ def _aware(value: datetime, floating_tz: tzinfo) -> datetime:
     return value.astimezone(UTC)
 
 
-def _declined(component: icalendar.Event, emails: Iterable[str]) -> bool:
+# Which of two overlapping events wins first depends on how sure you are to
+# be there. Declined and delegated invitations are not shown at all.
+RESPONSE_RANK = {"accepted": 2, "tentative": 1, "needs-action": 0}
+_PARTSTAT = {"ACCEPTED": "accepted", "TENTATIVE": "tentative"}
+_NOT_ATTENDING = {"DECLINED", "DELEGATED"}
+
+
+def _address(value: object) -> str:
+    return str(value).lower().removeprefix("mailto:")
+
+
+def _response(component: icalendar.Event, emails: Iterable[str]) -> str | None:
+    """
+    Your answer to this event, or None when you are not going.
+
+    Your own attendee entry decides, even on an event you organise. An event
+    with no attendees is your own, so accepted. Without your address there is
+    no telling, so every event counts as accepted.
+    """
     mine = {email.lower() for email in emails}
-    if not mine:
-        return False
     attendees = component.get("ATTENDEE", [])
     if not isinstance(attendees, list):
         attendees = [attendees]
+    if not attendees or not mine:
+        return "accepted"
     for attendee in attendees:
-        address = str(attendee).lower().removeprefix("mailto:")
-        if address in mine:
-            return str(attendee.params.get("PARTSTAT", "")).upper() == "DECLINED"
-    return False
+        if _address(attendee) in mine:
+            # RFC 5545: an attendee without PARTSTAT has not answered.
+            partstat = str(attendee.params.get("PARTSTAT", "NEEDS-ACTION")).upper()
+            if partstat in _NOT_ATTENDING:
+                return None
+            return _PARTSTAT.get(partstat, "needs-action")
+    if _address(component.get("ORGANIZER", "")) in mine:
+        return "accepted"
+    # Invited some other way, say through a group: no answer of yours on record.
+    return "needs-action"
 
 
 def parse(
@@ -136,7 +165,8 @@ def _event(
         return None
     if skip_free and str(component.get("TRANSP", "")).upper() == "TRANSPARENT":
         return None
-    if _declined(component, emails):
+    response = _response(component, emails)
+    if response is None:
         return None
 
     title = " ".join(str(component.get("SUMMARY", "")).split()) or UNTITLED
@@ -146,4 +176,5 @@ def _event(
         start=start,
         end=end,
         calendar=calendar,
+        response=response,
     )

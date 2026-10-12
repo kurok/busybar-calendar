@@ -5,10 +5,11 @@ from __future__ import annotations
 import argparse
 import asyncio
 import contextlib
+import dataclasses
 import logging
 import signal
 import sys
-from datetime import UTC, datetime, timedelta, tzinfo
+from datetime import UTC, date, datetime, time, timedelta, tzinfo
 from zoneinfo import ZoneInfo
 
 from busylib.client import AsyncBusyBar
@@ -111,12 +112,81 @@ async def cmd_upcoming(config: Config, args: argparse.Namespace) -> int:
             notes.append(f"reminder {reminder.minutes_before}m")
         if status.enabled:
             notes.append(f"status {status.show}")
+        if event.response != "accepted":
+            notes.append(event.response)
         print(
             f"{start:%a %d %b %H:%M}-{end:%H:%M}  [{event.calendar.source}/"
             f"{event.calendar.name}]  {event.title}  ({', '.join(notes) or 'hidden'})"
         )
     screen = schedule.choose(now, runner.events, runner.settings_for)
     print(f"\nNow on the bar: {screen.kind + ': ' + screen.event.title if screen else 'nothing'}")
+    return 0
+
+
+def _day(text: str, tz: tzinfo) -> date:
+    today = datetime.now(tz).date()
+    named = {"today": today, "tomorrow": today + timedelta(days=1)}
+    return named.get(text) or date.fromisoformat(text)
+
+
+async def _sleep_until(moment: datetime) -> None:
+    await asyncio.sleep(max(0.0, (moment - datetime.now(UTC)).total_seconds()))
+
+
+async def cmd_replay(config: Config, args: argparse.Namespace) -> int:
+    """
+    Play a day's real events on the bar, one after another, in short slots.
+
+    Each event gets `--seconds`: a third as its reminder, counting down to a
+    start moved to the end of that third, the rest as its status. Titles,
+    settings, sounds and drawings are the real ones; only the times are not.
+    """
+    tz = _floating_tz(config)
+    day = _day(args.day, tz)
+    day_start = datetime.combine(day, time.min, tzinfo=tz)
+    day_end = day_start + timedelta(days=1)
+    items = _sources(config)
+    try:
+        found = await asyncio.gather(*(item.fetch(day_start, day_end) for item in items))
+    finally:
+        await _close(items)
+    events = sorted(
+        (e for events in found for e in events if day_start <= e.start < day_end),
+        key=lambda e: (e.start, e.calendar.order),
+    )
+    if not events:
+        print(f"No events on {day:%a %d %b}.")
+        return 0
+
+    reminder_part = timedelta(seconds=max(5, args.seconds // 3))
+    status_part = timedelta(seconds=args.seconds) - reminder_part
+    print(f"Replaying {len(events)} events of {day:%a %d %b}, {args.seconds}s each.")
+    bar = _bar(config)
+    runner = Runner(config, bar, [])
+    try:
+        for number, event in enumerate(events, 1):
+            reminder, status = runner.settings_for(event)
+            start = datetime.now(UTC).replace(microsecond=0) + reminder_part
+            moved = dataclasses.replace(event, start=start, end=start + status_part)
+            print(
+                f"{number:>2}/{len(events)}  {event.start.astimezone(tz):%H:%M}-"
+                f"{event.end.astimezone(tz):%H:%M}  {event.title}  [{event.response}]",
+                flush=True,
+            )
+            if reminder.enabled:
+                screen = schedule.Screen("reminder", moved, reminder, status)
+                await runner.show(screen, chime=not args.quiet)
+            await _sleep_until(moved.start)
+            if status.enabled:
+                screen = schedule.Screen("status", moved, reminder, status)
+                await runner.show(screen, chime=not args.quiet)
+            else:
+                await runner.clear()
+            await _sleep_until(moved.end)
+    finally:
+        with contextlib.suppress(Exception):
+            await runner.clear()
+        await bar.aclose()
     return 0
 
 
@@ -168,6 +238,12 @@ def main(argv: list[str] | None = None) -> int:
     demo.add_argument("--font", choices=["tiny", "small", "global"])
     demo.add_argument("--sound", action="store_true")
     demo.add_argument("--seconds", type=int, default=20, help="how long to leave it up")
+    replay = commands.add_parser(
+        "replay", help="play a day's events on the bar one after another, in short slots"
+    )
+    replay.add_argument("--day", default="tomorrow", help="today, tomorrow or YYYY-MM-DD")
+    replay.add_argument("--seconds", type=int, default=60, help="slot per event")
+    replay.add_argument("--quiet", action="store_true", help="no sounds")
     args = parser.parse_args(argv)
 
     logging.basicConfig(
@@ -186,6 +262,7 @@ def main(argv: list[str] | None = None) -> int:
         "calendars": cmd_calendars,
         "upcoming": cmd_upcoming,
         "demo": cmd_demo,
+        "replay": cmd_replay,
     }
     try:
         config = config_module.load(args.config)

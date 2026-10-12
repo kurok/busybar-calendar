@@ -100,3 +100,41 @@ def test_untitled_and_whitespace():
         "UID:b\nSUMMARY:  Sprint\\n  review \nDTSTART:20261013T110000Z\nDTEND:20261013T120000Z",
     )
     assert [e.title for e in run(data)] == ["Busy", "Sprint review"]
+
+
+ME = ["me@example.com"]
+
+
+def responses(*attendee_lines, organizer=None, emails=ME):
+    extra = "\n".join(attendee_lines)
+    if organizer:
+        extra += f"\nORGANIZER:mailto:{organizer}"
+    data = ics(f"UID:a\nSUMMARY:X\nDTSTART:20261013T090000Z\nDTEND:20261013T100000Z\n{extra}")
+    events = run(data, emails=emails)
+    return events[0].response if events else None
+
+
+def test_response_follows_my_attendee_entry():
+    other = "ATTENDEE;PARTSTAT=ACCEPTED:mailto:other@example.com"
+    assert responses(other, "ATTENDEE;PARTSTAT=ACCEPTED:mailto:me@example.com") == "accepted"
+    assert responses(other, "ATTENDEE;PARTSTAT=TENTATIVE:mailto:ME@example.com") == "tentative"
+    assert responses(other, "ATTENDEE;PARTSTAT=NEEDS-ACTION:mailto:me@example.com") == (
+        "needs-action"
+    )
+    # RFC 5545: no PARTSTAT means no answer yet.
+    assert responses(other, "ATTENDEE:mailto:me@example.com") == "needs-action"
+    assert responses(other, "ATTENDEE;PARTSTAT=DECLINED:mailto:me@example.com") is None
+    assert responses(other, "ATTENDEE;PARTSTAT=DELEGATED:mailto:me@example.com") is None
+
+
+def test_my_own_entry_wins_even_when_i_organise():
+    mine = "ATTENDEE;PARTSTAT=TENTATIVE:mailto:me@example.com"
+    assert responses(mine, organizer="me@example.com") == "tentative"
+
+
+def test_response_without_my_entry():
+    other = "ATTENDEE;PARTSTAT=ACCEPTED:mailto:other@example.com"
+    assert responses() == "accepted"  # no attendees: an event of my own
+    assert responses(other, organizer="me@example.com") == "accepted"
+    assert responses(other, organizer="boss@example.com") == "needs-action"  # via a group
+    assert responses(other, emails=[]) == "accepted"  # no address to tell by

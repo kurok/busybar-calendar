@@ -47,9 +47,11 @@ back to whatever it was showing.
   timezones and floating times handled.
 - **Google's per-calendar settings** (reminder time, sound, show name,
   status), set once as defaults and overridden per source or per calendar.
-- **Google's rules**: no all-day or 24-hour-plus events; when events
-  overlap, the newest wins. Also skipped: cancelled events, events marked
-  free, invitations you declined.
+- **Overlaps settled by your response**: an event you accepted wins over
+  one you marked tentative, which wins over one you have not answered; then,
+  as in Google's integration, the newest event wins.
+- **Google's filters**: no all-day or 24-hour-plus events. Also skipped:
+  cancelled events, events marked free, invitations you declined.
 - **On time**: the loop wakes at the next change, not on the next poll.
 - **Resilient**: a failing source keeps its last good events; a bar that
   cannot be reached is retried; drawings expire on the bar by themselves
@@ -87,6 +89,7 @@ Then:
 busybar-calendar calendars   # the calendars each CalDAV account has
 busybar-calendar upcoming    # what the bar will show, and when
 busybar-calendar demo        # draw a sample reminder for 20 seconds
+busybar-calendar replay      # play tomorrow's events on the bar, a minute each
 busybar-calendar run         # keep the bar in step with your calendars
 ```
 

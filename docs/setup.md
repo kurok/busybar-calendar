@@ -132,9 +132,11 @@ both are given:
 minutes_before = 10
 ```
 
-Invitations you declined are skipped by matching your attendee address. It
-defaults to `username` when that is an email address; set `emails = [...]`
-if your invitations go to another one.
+Your answer to each invitation is read from your attendee entry, found by
+your address: declined invitations are skipped, and when two events overlap,
+the one you accepted wins over one you marked tentative or have not
+answered. The address defaults to `username` when that is an email address;
+set `emails = [...]` if your invitations go to another one.
 
 ### ICS / webcal feeds
 
@@ -188,10 +190,12 @@ it, since it names your accounts.
 
 ```sh
 busybar-calendar calendars                 # discovery: calendars per CalDAV source
-busybar-calendar upcoming --hours 48       # events, their settings, and what is on now
+busybar-calendar upcoming --hours 48       # events, settings, your response, what is on now
 busybar-calendar demo                      # a sample reminder for 20 seconds
 busybar-calendar demo --status --show meeting
 busybar-calendar demo --font global --title "Планування спринту"
+busybar-calendar replay                    # tomorrow's real events, one a minute
+busybar-calendar replay --day today --seconds 30 --quiet
 busybar-calendar -v run                    # run in the foreground with debug logs
 ```
 
