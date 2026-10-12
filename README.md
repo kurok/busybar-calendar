@@ -1,146 +1,121 @@
 # busybar-calendar
 
-Calendar reminders for the [BUSY Bar](https://busy.app) from any CalDAV
-account or published ICS feed: iCloud, Fastmail, Nextcloud, Zoho, Yahoo,
-mailbox.org, self-hosted servers, or an Outlook/Proton calendar shared by
-link.
+Calendar reminders for the [BUSY Bar](https://busy.app) from **any CalDAV
+account or ICS feed**, shown exactly the way the bar shows its built-in
+Google Calendar events.
 
-The bar shows them the way it shows events from its built-in
-[Google Calendar integration](https://docs.busy.app/bar/apps-and-integrations/google-calendar):
-a reminder with a countdown before the event, then a status while it runs,
-with the same per-calendar settings. Only the source differs. BUSY Cloud
-talks to Google; this talks to a URL you give it, and draws through the
-bar's own [HTTP API](https://docs.busy.app/bar/dev/http-api), on the LAN or
-through BUSY Cloud.
+![A reminder on the BUSY Bar: calendar icon, title and countdown](docs/images/reminder.gif)
 
-Requested upstream in
-[busy-app/busybar-firmware#1086](https://github.com/busy-app/busybar-firmware/issues/1086);
-this runs today, on a machine of your own.
+The bar's own [Google Calendar integration](https://docs.busy.app/bar/apps-and-integrations/google-calendar)
+runs in BUSY Cloud and only talks to Google. This does the same thing for
+iCloud, Fastmail, Nextcloud, PrivateEmail, self-hosted CalDAV servers, and
+any calendar published as an ICS link (Outlook, Google, Proton). It runs on
+a machine of yours and draws through the bar's
+[HTTP API](https://docs.busy.app/bar/dev/http-api), via BUSY Cloud or on the
+LAN. The events look the same as Google's; only where they come from is
+different. Requested upstream as
+[busybar-firmware#1086](https://github.com/busy-app/busybar-firmware/issues/1086).
 
-## What the bar shows
+## On the bar
 
-| When | Front display | Sound |
-| --- | --- | --- |
-| `minutes_before` the start | calendar-reminder animation, title, countdown to the start | `calendar_reminder_ends` |
-| During the event | calendar-event animation, title, countdown to the end, or a status animation such as `meeting` | `calendar_event_starts` |
-| After it ends | whatever was there before | |
+Every picture here is a frame read back from a real bar (firmware 1.2.4)
+through `GET /api/screen`.
 
-These are the bar's own stock animations and sounds. Drawings go in at
-priority 91, above an active BUSY session (90), so like Google events they
-show on top of any status. Each element carries `display_until`, so the bar
-removes it by itself within a minute even if this service has stopped.
+| | |
+| --- | --- |
+| **Before the event** - the bar's calendar-reminder animation, the title, and a countdown to the start. | ![Reminder](docs/images/reminder.gif) |
+| **During the event** - the calendar-event animation, the title, and a countdown to the end ... | ![Status with the event name](docs/images/status.png) |
+| ... or one of the bar's own statuses, such as `meeting`, `on_call` or `dnd`. | ![Meeting status](docs/images/status-meeting.gif) |
+| **Long titles** scroll beside the icon. | ![Scrolling title](docs/images/long-title.gif) |
+| **Titles in other scripts** are transliterated for the bar's bitmap fonts (`Планування спринту` becomes `Planuvannya sprintu`) ... | ![Transliterated title](docs/images/cyrillic-transliterated.gif) |
+| ... or drawn as they are with `title_font = "global"`, on one line beside the countdown. | ![Cyrillic title in the global font](docs/images/cyrillic-global.gif) |
+| **Event name hidden** for a calendar (`show_name = false`). | ![Hidden name](docs/images/hidden-name.png) |
 
-Rules, following the Google integration:
+Like Google events, these go in above an active BUSY session, so they show
+on top of any status. A sound plays as a reminder opens and as an event
+starts, using the bar's own calendar sounds. After the event, the bar goes
+back to whatever it was showing.
 
-- Events of 24 hours or more, and all-day events, are not shown.
-- When events overlap, the newest event wins, and between events starting
-  together, the calendar listed last. A reminder for your next meeting
-  therefore replaces the status of the one still running.
-- Also skipped: cancelled events, events marked free (`skip_free`), and
-  invitations you declined (matched on `emails`, which defaults to the
-  CalDAV username when it is an email address).
+## Features
+
+- **CalDAV** with discovery (`/.well-known/caldav`, principal, calendar home),
+  or a calendar URL directly; Basic or Digest auth.
+- **ICS / webcal** feeds, fetched with `If-None-Match`.
+- **Recurring events** expanded locally (RRULE, EXDATE, moved occurrences),
+  timezones and floating times handled.
+- **Google's per-calendar settings** (reminder time, sound, show name,
+  status), set once as defaults and overridden per source or per calendar.
+- **Google's rules**: no all-day or 24-hour-plus events; when events
+  overlap, the newest wins. Also skipped: cancelled events, events marked
+  free, invitations you declined.
+- **On time**: the loop wakes at the next change, not on the next poll.
+- **Resilient**: a failing source keeps its last good events; a bar that
+  cannot be reached is retried; drawings expire on the bar by themselves
+  if the service stops.
+- **No secrets in files**: passwords and tokens come from the environment
+  or a command such as the macOS Keychain.
+
+## Quick start
+
+```sh
+git clone https://github.com/kurok/busybar-calendar.git
+cd busybar-calendar
+uv tool install .                         # puts busybar-calendar on your PATH
+cp config.example.toml config.toml        # then edit it
+```
+
+A minimal `config.toml`:
+
+```toml
+[bar]
+# A BUSY Cloud token with the "BUSY Bar" access scope, read from the Keychain.
+token_command = ["security", "find-generic-password", "-s", "busybar-token", "-w"]
+
+[[sources]]
+name = "iCloud"
+type = "caldav"
+url = "https://caldav.icloud.com"
+username = "me@icloud.com"
+password_command = ["security", "find-generic-password", "-s", "busybar-icloud", "-w"]
+```
+
+Then:
+
+```sh
+busybar-calendar calendars   # the calendars each CalDAV account has
+busybar-calendar upcoming    # what the bar will show, and when
+busybar-calendar demo        # draw a sample reminder for 20 seconds
+busybar-calendar run         # keep the bar in step with your calendars
+```
+
+[docs/setup.md](docs/setup.md) covers connecting the bar (cloud token or LAN
+password), the URLs for each calendar provider, storing secrets, and
+running it as a service with launchd, systemd or Docker.
 
 ## Settings
 
-The per-calendar settings are Google's:
+The per-calendar settings are the Google Calendar integration's:
 
-| Google Calendar integration | here |
+| Google Calendar integration | `config.toml` |
 | --- | --- |
 | Event reminders: on/off | `reminder.enabled` |
 | How long before the event | `reminder.minutes_before` |
 | Sound | `reminder.sound` |
 | Show event name | `reminder.show_name` |
 | Status during events: on/off | `status.enabled` |
-| Event name, or a status from the list | `status.show`: `name`, `meeting`, `on_call`, ... |
+| Event name, or a status from the list | `status.show`: `name`, `meeting`, `on_call`, `dnd`, ... |
 | Sound | `status.sound` |
 
-They layer: `[defaults]` for every calendar, overridden per source, then per
+They layer: `[defaults]` for every calendar, then per source, then per
 calendar (`[sources.calendars."Work".reminder]`). Setting a default once is
-the account-level setting BUSY Cloud lacks
+the account-level setting BUSY Cloud does not have yet
 ([busybar-firmware#1083](https://github.com/busy-app/busybar-firmware/issues/1083)).
-See [`config.example.toml`](config.example.toml) for all of it.
+All the options are in [`config.example.toml`](config.example.toml).
 
-## Setup
+## Documentation
 
-1. Turn on the bar's HTTP API over Wi-Fi: connect it by USB, open
-   `http://10.0.4.20`, then **Network -> HTTP API -> Set password and enable**.
-   Or skip this and use a BUSY Cloud token with the **BUSY Bar** access
-   scope instead of an address.
-2. Install and configure:
-
-   ```sh
-   uv tool install git+https://github.com/kurok/busybar-calendar
-   cp config.example.toml config.toml   # then edit it
-   export BUSYBAR_TOKEN=...              # the bar's HTTP API password
-   ```
-
-3. Check it:
-
-   ```sh
-   busybar-calendar calendars   # what each CalDAV account has
-   busybar-calendar upcoming    # what the bar will show, and when
-   busybar-calendar demo        # draw a sample reminder for 20 seconds
-   busybar-calendar demo --status --show meeting
-   ```
-
-4. Run it: `busybar-calendar run`.
-
-Passwords can come from the environment (`password_env`) or a command
-(`password_command`, run without a shell), for example the macOS keychain:
-
-```sh
-security add-generic-password -s busybar-icloud -a me@icloud.com -w
-```
-
-### Keep it running
-
-macOS, as a launchd agent (`~/Library/LaunchAgents/app.busybar.calendar.plist`):
-
-```xml
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-  <key>Label</key><string>app.busybar.calendar</string>
-  <key>ProgramArguments</key>
-  <array>
-    <string>/Users/me/.local/bin/busybar-calendar</string>
-    <string>--config</string><string>/Users/me/.config/busybar-calendar/config.toml</string>
-    <string>run</string>
-  </array>
-  <key>RunAtLoad</key><true/>
-  <key>KeepAlive</key><true/>
-</dict>
-</plist>
-```
-
-Docker, on a home server or a Raspberry Pi:
-
-```sh
-docker build -t busybar-calendar .
-docker run -d --restart unless-stopped -e BUSYBAR_TOKEN \
-  -v "$PWD/config.toml:/config/config.toml:ro" busybar-calendar
-```
-
-## How it works
-
-CalDAV discovery follows RFC 6764 and RFC 4791: `/.well-known/caldav`, then
-`current-user-principal`, then `calendar-home-set`, then the calendars that
-hold events. A calendar collection URL also works directly. Events come from
-a `calendar-query` REPORT over the next `lookahead_hours`. Recurrence (RRULE,
-EXDATE, moved occurrences) is expanded here with
-[recurring-ical-events](https://github.com/niccokunzmann/python-recurring-ical-events),
-not by the server, because servers differ in how well they do it. ICS feeds
-are fetched with `If-None-Match`.
-
-A source that fails keeps its last good events, so a server hiccup does not
-take a running meeting off the bar. The loop sleeps until the next moment
-the screen can change, so reminders appear on time rather than on the next
-poll.
-
-Titles are folded to ASCII for the bar's bitmap fonts
-(`Планування` -> `Planuvannya`), and emoji are dropped.
-`title_font = "global"` keeps them in their own script.
+- [Setup](docs/setup.md) - the bar, calendar providers, secrets, running as a service, troubleshooting.
+- [How it works](docs/how-it-works.md) - the design, the API calls, and what was measured on the hardware.
 
 ## Development
 
@@ -149,6 +124,8 @@ uv sync
 uv run pytest
 uv run ruff check . && uv run ruff format --check .
 ```
+
+`scripts/capture_screens.py` regenerates `docs/images` from a real bar.
 
 ## License
 
