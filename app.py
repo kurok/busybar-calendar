@@ -27,23 +27,24 @@ running BUSY session (90), the way the bar's own calendar events do; between
 events nothing is drawn, so the bar is never held.
 """
 
+# First of all: Ctrl-C before the app is up ends it quietly. The first start
+# after an install can take seconds while the system checks the newly installed
+# libraries; once running, every mode handles SIGINT itself and clears the bar.
+import signal
+import sys
+
+signal.signal(signal.SIGINT, lambda *_: sys.exit(0))
+
 import argparse
 import asyncio
 import os
-import signal
-import sys
 from pathlib import Path
-
-# Ctrl-C before the app is up ends it quietly. The first start after an install
-# can take seconds while the system checks the newly installed libraries; once
-# running, every mode handles SIGINT itself and clears the bar on the way out.
-signal.signal(signal.SIGINT, lambda *_: sys.exit(0))
 
 # The app's code lives in src/busybar_calendar, next to this file.
 sys.path.insert(0, str(Path(__file__).resolve().parent / "src"))
 
-from busybar_calendar import cli  # noqa: E402 - after the SIGINT handler and sys.path
-from busybar_calendar.config import Config, ConfigError, find, load  # noqa: E402
+from busybar_calendar import cli
+from busybar_calendar.config import Config, ConfigError, find, load
 
 APP = "busybar-calendar"
 USB_HOST = "10.0.4.20"

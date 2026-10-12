@@ -72,24 +72,51 @@ def test_cloud_needs_a_token(no_config, monkeypatch):
     assert config.bar.address is None and config.bar.token.resolve() == "t"
 
 
-@pytest.mark.parametrize("after", [0.05, 1.5], ids=["while starting", "while running"])
-def test_ctrl_c_ends_it_cleanly(no_config, after):
-    """The gallery's checker sends SIGINT and expects exit 0 and no traceback - also
-    when it lands mid-import, as on the slow first start after an install."""
+# Runs app.py, and sends SIGINT to itself the moment app.py imports its package:
+# mid-import, before any of the app's own handling exists - whatever the
+# machine's speed, unlike a timed signal.
+INTERRUPT_MID_IMPORT = """
+import builtins, os, runpy, signal, sys
+sys.argv = [sys.argv[1], "--demo", "--host", "127.0.0.1:9"]
+real_import = builtins.__import__
+def interrupting_import(name, *args, **kwargs):
+    if name == "busybar_calendar":
+        builtins.__import__ = real_import
+        os.kill(os.getpid(), signal.SIGINT)
+    return real_import(name, *args, **kwargs)
+builtins.__import__ = interrupting_import
+runpy.run_path(sys.argv[0], run_name="__main__")
+"""
+
+
+def _interrupt(command, after):
     import signal
     import subprocess
-    import sys
     import time
 
-    # The demo against a bar that is not there: it keeps trying until stopped.
-    proc = subprocess.Popen(
-        [sys.executable, str(ROOT / "app.py"), "--demo", "--host", "127.0.0.1:9"],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-    )
-    time.sleep(after)
-    proc.send_signal(signal.SIGINT)
+    proc = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    if after:
+        time.sleep(after)
+        proc.send_signal(signal.SIGINT)
     _, err = proc.communicate(timeout=10)
-    assert proc.returncode == 0, err
+    return proc.returncode, err
+
+
+def test_ctrl_c_while_starting_ends_it_cleanly(no_config):
+    """The gallery's checker sends SIGINT and expects exit 0 and no traceback, also
+    when it lands mid-import, as on the slow first start after an install."""
+    import sys
+
+    code, err = _interrupt([sys.executable, "-c", INTERRUPT_MID_IMPORT, str(ROOT / "app.py")], 0)
+    assert code == 0, err
+    assert "Traceback" not in err
+
+
+def test_ctrl_c_while_running_clears_and_ends_it_cleanly(no_config):
+    import sys
+
+    # The demo against a bar that is not there keeps trying until stopped.
+    command = [sys.executable, str(ROOT / "app.py"), "--demo", "--host", "127.0.0.1:9"]
+    code, err = _interrupt(command, 1.5)
+    assert code == 0, err
     assert "Traceback" not in err
