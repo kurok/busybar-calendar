@@ -78,6 +78,22 @@ def test_systemd_quotes_paths_with_spaces():
     assert 'ExecStart="/opt/my tools/python" -m x' in text
 
 
+def test_installed_python_reads_the_service_file(home):
+    for platform in ("darwin", "linux"):
+        assert service.installed_python(platform) is None  # not installed
+        plan = service.install_plan(Path("c.toml"), platform)
+        plan.path.parent.mkdir(parents=True)
+        command = ["/opt/my tools/bin/python", "-m", "busybar_calendar", "run"]
+        plan.path.write_bytes(
+            service.launchd_plist(command, Path("/c.toml"), Path("/l.log"))
+            if platform == "darwin"
+            else service.systemd_unit(command, Path("/c.toml"))
+        )
+        assert service.installed_python(platform) == "/opt/my tools/bin/python"
+        plan.path.write_text("garbage")
+        assert service.installed_python(platform) is None
+
+
 # Shapes taken from `launchctl print` on macOS: the job's fields one tab deep,
 # nested blocks (which repeat `state`) deeper.
 RUNNING = """gui/501/app.busybar.calendar = {

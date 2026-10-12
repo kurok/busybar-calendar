@@ -1,3 +1,4 @@
+import sys
 from pathlib import Path
 
 import pytest
@@ -181,6 +182,7 @@ async def test_status_as_json(monkeypatch, capsys):
         service, "status", lambda: service.Status(True, False, detail="last exit code 1")
     )
     monkeypatch.setattr(service, "recent_log", lambda state: ["Feed: 401, check the credentials"])
+    monkeypatch.setattr(service, "installed_python", lambda: "/opt/venv/bin/python")
     now = datetime.now(UTC)
     later = Event(
         "b",
@@ -212,6 +214,7 @@ async def test_status_as_json(monkeypatch, capsys):
         "log": None,
         "recent_log": ["Feed: 401, check the credentials"],
         "version": None,
+        "python": "/opt/venv/bin/python",
     }
     assert data["calendar"]["now"] is None
     nxt = data["calendar"]["next"]
@@ -369,11 +372,28 @@ async def test_status_says_when_the_service_runs_another_version(monkeypatch, ca
         "2026-10-12 INFO busybar_calendar.runner: cleared\n"
     )
     monkeypatch.setattr(service, "status", lambda: service.Status(True, True, pid=7, log=log))
+    monkeypatch.setattr(service, "installed_python", lambda: sys.executable)  # this install
     assert service.running_version(service.Status(True, True, log=log)) == "0.1.0"  # the last
     await diagnose.status(None)
     out = capsys.readouterr().out
     assert "Service   running 0.1.0, pid 7" in out
-    assert f"that is 0.1.0, but this is {__version__}" in out and "restart" in out
+    assert f"that is 0.1.0, but this is {__version__}" in out and "restart` runs this one" in out
+
+
+async def test_status_names_the_install_the_service_runs_from(monkeypatch, capsys, tmp_path):
+    from busybar_calendar import __version__, service
+
+    log = tmp_path / "busybar-calendar.log"
+    log.write_text("x busybar-calendar 0.1.0 started: 1 calendar source(s)\n")
+    monkeypatch.setattr(service, "status", lambda: service.Status(True, True, pid=7, log=log))
+    # A checkout run with `uv run`, while the service runs the `uv tool` install:
+    # a restart would start 0.1.0 again, so it must not be offered as the fix.
+    monkeypatch.setattr(service, "installed_python", lambda: "/opt/tools/old/bin/python")
+    await diagnose.status(None)
+    out = capsys.readouterr().out
+    assert f"that is 0.1.0, from /opt/tools/old, not this {__version__}" in out
+    assert "upgrade that one, then `busybar-calendar restart`" in out
+    assert "runs this one" not in out
 
 
 async def test_status_quiet_when_versions_match(monkeypatch, capsys, tmp_path):

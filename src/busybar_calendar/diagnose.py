@@ -6,8 +6,10 @@ import asyncio
 import contextlib
 import json
 import logging
+import sys
 from collections.abc import Callable, Iterator
 from datetime import UTC, datetime, timedelta, tzinfo
+from pathlib import Path
 
 from busylib.client import AsyncBusyBar
 from busylib.exceptions import BusyBarAPIError
@@ -239,6 +241,7 @@ async def status_data(config: Config | None) -> dict:
             "log": str(state.log) if state.log and state.log.exists() else None,
             "recent_log": service.recent_log(state),
             "version": service.running_version(state) if state.running else None,
+            "python": service.installed_python() if state.installed else None,
         },
         "bar": None,
         "calendar": None,
@@ -264,6 +267,14 @@ async def status_data(config: Config | None) -> dict:
     return data
 
 
+def _environment(python: str) -> str:
+    """The environment an interpreter belongs to (its bin/ folder's parent), home as ~."""
+    folder = Path(python).parent.parent
+    with contextlib.suppress(ValueError):
+        return str(Path("~") / folder.relative_to(Path.home()))
+    return str(folder)
+
+
 def print_status(data: dict) -> None:
     print(f"busybar-calendar {data['version']}")
     svc = data["service"]
@@ -272,10 +283,19 @@ def print_status(data: dict) -> None:
         running = svc.get("version")
         print(f"Service   running{f' {running}' if running else ''}{pid}")
         if running and running != data["version"]:
-            print(
-                f"          that is {running}, but this is {data['version']}: "
-                "`busybar-calendar restart` runs this one"
-            )
+            python = svc.get("python")
+            if python and python != sys.executable:
+                # Another environment: restarting it starts the same old version again.
+                print(
+                    f"          that is {running}, from {_environment(python)}, "
+                    f"not this {data['version']}:"
+                )
+                print("          upgrade that one, then `busybar-calendar restart`")
+            else:
+                print(
+                    f"          that is {running}, but this is {data['version']}: "
+                    "`busybar-calendar restart` runs this one"
+                )
     elif svc["installed"]:
         why = f" ({svc['detail']})" if svc["detail"] else ""
         print(f"Service   stopped{why}; the log says why")

@@ -1,8 +1,9 @@
 # Setup
 
-The quick way is three commands:
+The quick way:
 
 ```sh
+uv tool install git+https://github.com/kurok/busybar-calendar
 busybar-calendar init      # answers in, config out: the bar, the calendar, the passwords
 busybar-calendar check     # proves it works, or says what to fix
 busybar-calendar install   # runs it in the background from now on
@@ -266,26 +267,17 @@ login, and again if it stops. On macOS that is a launch agent
 `busybar-calendar status` shows how it is doing:
 
 ```
-Service   running, pid 4321
+busybar-calendar 0.3.1
+Service   running 0.3.1, pid 4321
           log /Users/me/Library/Logs/busybar-calendar.log
             16:40:19 INFO busybar_calendar.runner: reminder: Design review (Work, accepted) ...
             16:45:00 INFO busybar_calendar.runner: status: Design review (Work, accepted) ...
+Bar       BUSY Cloud: answering
 Calendar  now status: Design review, until Tue 13 Oct 17:30 (in 44m)
           next reminder: Retro, at Tue 13 Oct 17:55 (in 1h 09m)
 ```
 
 A stopped service shows its last exit code, with the log lines that explain it.
-
-### Upgrading
-
-```sh
-cd busybar-calendar && git pull
-uv tool install --force .    # the new version, for the command and the service alike
-busybar-calendar restart     # until then the service keeps running the old one
-```
-
-`status` shows which version the service runs (`Service   running 0.2.0, pid
-4321`), and says so when it is not the one just installed.
 
 Both `status` and `check` take `--json`, for scripts, dashboards or a menu-bar
 widget. `check --json` exits non-zero when something fails, like `check`:
@@ -293,6 +285,36 @@ widget. `check --json` exits non-zero when something fails, like `check`:
 ```sh
 busybar-calendar status --json | jq -r '.calendar.next | "\(.kind) \(.title) at \(.at)"'
 busybar-calendar check --json | jq '.findings[] | select(.ok | not) | .message'
+```
+
+### Upgrading
+
+Install the new version over the old one, then restart the service, which
+keeps running the old one until then:
+
+```sh
+uv tool install --force git+https://github.com/kurok/busybar-calendar   # or @v0.3.1 for a release
+busybar-calendar restart
+```
+
+From a clone, `git pull && uv tool install --force .` does the same. Your
+config and passwords stay where they are.
+
+`status` shows which version the service runs, and says when it is not the
+one just installed:
+
+```
+Service   running 0.3.0, pid 4321
+          that is 0.3.0, but this is 0.3.1: `busybar-calendar restart` runs this one
+```
+
+When the command you run is from another install than the service (a
+checkout run with `uv run`, say), a restart would start the old version
+again, so `status` names the install to upgrade instead:
+
+```
+          that is 0.3.0, from ~/.local/share/uv/tools/busybar-calendar, not this 0.3.1:
+          upgrade that one, then `busybar-calendar restart`
 ```
 
 ### Docker

@@ -15,6 +15,7 @@ from __future__ import annotations
 import os
 import plistlib
 import re
+import shlex
 import subprocess
 import sys
 from dataclasses import dataclass
@@ -244,6 +245,20 @@ def restart(platform: str = sys.platform) -> bool:
     else:
         command = ["systemctl", "--user", "restart", UNIT]
     return subprocess.run(command, capture_output=True, check=False).returncode == 0
+
+
+def installed_python(platform: str = sys.platform) -> str | None:
+    """The interpreter the installed service starts, read from its own file; None if unknown."""
+    path = uninstall_plan(platform).path
+    try:
+        if platform == "darwin":
+            return plistlib.loads(path.read_bytes())["ProgramArguments"][0]
+        for line in path.read_text().splitlines():
+            if line.startswith("ExecStart="):
+                return shlex.split(line.removeprefix("ExecStart="))[0]
+    except (OSError, ValueError, KeyError, IndexError, TypeError):
+        return None
+    return None
 
 
 STARTED = re.compile(r"busybar-calendar (\S+) started")

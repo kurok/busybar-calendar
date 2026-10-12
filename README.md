@@ -62,11 +62,10 @@ back to whatever it was showing.
 ## Get started
 
 ```sh
-git clone https://github.com/kurok/busybar-calendar.git && cd busybar-calendar
-uv tool install .            # puts busybar-calendar on your PATH
-busybar-calendar init        # a few questions: how to reach the bar, which calendar
-busybar-calendar check       # proves it works, or says what to fix
-busybar-calendar install     # runs it in the background from now on
+uv tool install git+https://github.com/kurok/busybar-calendar
+busybar-calendar init     # a few questions: how to reach the bar, which calendar
+busybar-calendar check    # proves it works, or says what to fix
+busybar-calendar install  # runs it in the background from now on
 ```
 
 `init` asks how to reach the bar (BUSY Cloud, Wi-Fi or USB) and which
@@ -96,9 +95,10 @@ start from [`config.example.toml`](config.example.toml).
 
 `app.py` follows the [community gallery](https://github.com/maxswinkels/busybar-apps)'s
 conventions: one entrypoint, `--host` (default `10.0.4.20`, the bar over
-USB), secrets from the environment only.
+USB), secrets from the environment only. It runs from a clone:
 
 ```sh
+git clone https://github.com/kurok/busybar-calendar.git && cd busybar-calendar
 pip install -r requirements.txt
 python app.py                        # the config init wrote; a demo schedule before that
 python app.py --host 192.168.1.50 --ics "https://example.com/work.ics"

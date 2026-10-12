@@ -6,6 +6,18 @@ All notable changes to busybar-calendar. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- Install with one line, no clone needed:
+  `uv tool install git+https://github.com/kurok/busybar-calendar`. The
+  setup guide's "Upgrading" section does the same with `--force`.
+
+### Fixed
+
+- `status` no longer offers `restart` as the way to a newer version when the
+  service runs from another install (a checkout run with `uv run`, say): a
+  restart would start the old version again. It names the install to upgrade.
+
 ## [0.3.1] - 2026-10-12
 
 ### Added
