@@ -21,6 +21,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any, Protocol
 
 from busylib import types
+from busylib.exceptions import BusyBarAPIError
 
 from . import render, schedule
 from .config import Config, ReminderSettings, StatusSettings
@@ -67,6 +68,8 @@ class Runner:
         self._events: dict[str, list[Event]] = {}
         self._settings: dict[tuple[str, str], tuple[ReminderSettings, StatusSettings]] = {}
         self._shown: object = _UNKNOWN
+        # The element ids this service last left on the bar; None when unknown.
+        self._drawn: frozenset[str] | None = None
         self._sounded: set[tuple[str, str]] = set()
         self._next_refresh = datetime.min.replace(tzinfo=UTC)
 
@@ -105,6 +108,33 @@ class Runner:
             return screen.event.start
         return screen.event.start - timedelta(minutes=screen.reminder.minutes_before)
 
+    async def _clear(self) -> None:
+        """Remove this service's drawing, and only this service's."""
+        try:
+            await self.bar.display_clear(application_name=self.app)
+        except BusyBarAPIError as error:
+            # The bar answers 400 when this application has nothing on
+            # screen - another app owns the canvas - which is already clear.
+            if error.status_code != 400:
+                raise
+        self._drawn = frozenset()
+
+    async def _draw(self, drawing: types.DisplayElements) -> None:
+        """
+        Put a drawing up in place of the last one.
+
+        A draw merges into what the application already shows, by element id,
+        so a layout with other ids - a status animation after a reminder -
+        would land on top of the old one. Clear first when the ids differ;
+        when they are the same, update in place, which does not flicker.
+        """
+        ids = frozenset(element.id for element in drawing.elements)
+        if self._drawn is None or (self._drawn and self._drawn != ids):
+            await self._clear()
+        self._drawn = None  # unknown until the draw is confirmed
+        await self.bar.display_draw(drawing)
+        self._drawn = ids
+
     async def tick(self, now: datetime) -> None:
         screen = schedule.choose(now, self.events, self.settings_for)
         key = screen.key if screen is not None else None
@@ -112,13 +142,13 @@ class Runner:
             return
         try:
             if screen is None:
-                await self.bar.display_clear(application_name=self.app)
+                await self._clear()
                 logger.info("cleared")
             else:
                 drawing = render.drawing(
                     screen, self.config.display, self.app, self.config.bar.priority
                 )
-                await self.bar.display_draw(drawing)
+                await self._draw(drawing)
                 logger.info(
                     "%s: %s (%s) until %s",
                     screen.kind,
@@ -131,6 +161,7 @@ class Runner:
         except Exception as error:
             logger.warning("bar refused the update (%s); retrying", error)
             self._shown = _UNKNOWN
+            self._drawn = None
 
     async def _chime(self, screen: schedule.Screen, now: datetime) -> None:
         moment = (screen.kind, screen.event.key)
@@ -165,6 +196,6 @@ class Runner:
                     await asyncio.wait_for(stop.wait(), timeout)
         finally:
             try:
-                await self.bar.display_clear(application_name=self.app)
+                await self._clear()
             except Exception as error:
                 logger.warning("could not clear the bar on exit: %s", error)
