@@ -165,3 +165,28 @@ def test_add_needs_a_config(tmp_path):
 
     with pytest.raises(ConfigError, match="busybar-calendar init"):
         wizard.add(tmp_path / "none.toml", ask=script(), store=FakeStore(), discover=None)
+
+
+def test_keychain_prompt_is_asked_again_then_gives_up_cleanly(monkeypatch, capsys):
+    import subprocess
+
+    import pytest
+
+    from busybar_calendar.config import ConfigError
+
+    codes = [1, 0]  # a mistyped retype, then right
+    monkeypatch.setattr(wizard.shutil, "which", lambda name: "/usr/bin/security")
+    monkeypatch.setattr(
+        wizard.subprocess,
+        "run",
+        lambda command, **kw: subprocess.CompletedProcess(command, codes.pop(0)),
+    )
+    secret = wizard.SecretStore("darwin").save("svc", "me", "ENV")
+    assert secret.command[-2:] == ["svc", "-w"]
+    assert "Once more" in capsys.readouterr().out
+
+    monkeypatch.setattr(
+        wizard.subprocess, "run", lambda command, **kw: subprocess.CompletedProcess(command, 1)
+    )
+    with pytest.raises(ConfigError, match="did not store the password"):
+        wizard.SecretStore("darwin").save("svc", "me", "ENV")

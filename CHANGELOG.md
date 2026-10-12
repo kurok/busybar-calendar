@@ -11,6 +11,16 @@ All notable changes to busybar-calendar. The format follows
 - `busybar-calendar` on its own says where you stand: the first steps before
   there is a config, the status after, instead of a usage error.
 
+### Fixed
+
+- A Keychain / libsecret prompt that failed - a mistyped retype - ended
+  `init` and `add` with a traceback; it is now asked again, up to three times,
+  then reported in one line.
+- A failing `launchctl` or `systemctl` ended `install` with a traceback; it is
+  now one line naming the command and its exit code.
+- The service remembered every screen it had chimed for; it now forgets
+  them once their events are gone, so a long-running service does not grow.
+
 ## [0.2.0] - 2026-10-12
 
 ### Added

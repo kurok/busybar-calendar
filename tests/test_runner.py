@@ -242,3 +242,13 @@ async def test_left_over_elements_are_cleared_first():
     await runner.tick(at(26))
     # (No chime for Long: its status opened ten minutes before the first tick.)
     assert bar.calls == [CLEAR, BUSY, CLEAR, TITLED, ("sound", "calendar_reminder_ends.snd")]
+
+
+async def test_chimes_of_events_that_are_gone_are_forgotten():
+    runner, _, source = make([meeting()])
+    await runner.refresh(at(5))
+    await runner.tick(at(5))
+    assert runner._sounded == {("reminder", meeting().key)}
+    source.events = []  # the meeting is over and out of the window
+    await runner.refresh(at(2000))
+    assert runner._sounded == set()

@@ -7,6 +7,7 @@ import asyncio
 import logging
 import os
 import shlex
+import subprocess
 import sys
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -295,6 +296,12 @@ def main(argv: list[str] | None = None) -> int:
         return asyncio.run(handlers[args.command](config, args))
     except (ConfigError, CalDAVError, sources.FatalSourceError, OSError, ValueError) as error:
         print(f"busybar-calendar: {error}", file=sys.stderr)
+        return 1
+    except subprocess.CalledProcessError as error:  # launchctl, systemctl
+        print(
+            f"busybar-calendar: {shlex.join(error.cmd)} failed (exit {error.returncode})",
+            file=sys.stderr,
+        )
         return 1
     except KeyboardInterrupt:
         return 130

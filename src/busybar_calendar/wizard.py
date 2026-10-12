@@ -24,7 +24,7 @@ from zoneinfo import ZoneInfo
 
 from . import sources
 from .caldav import CalDAVError, RemoteCalendar
-from .config import Config, SourceConfig, load
+from .config import Config, ConfigError, SourceConfig, load
 
 Ask = Callable[[str], str]
 USB_HOST = "10.0.4.20"
@@ -70,26 +70,26 @@ class SecretStore:
     def save(self, service: str, account: str, env: str) -> Secret:
         if self.platform == "darwin" and shutil.which("security"):
             print("The Keychain asks for it twice (nothing shows as you type):")
-            subprocess.run(
-                ["security", "add-generic-password", "-U", "-s", service, "-a", account, "-w"],
-                check=True,
+            self._store(
+                ["security", "add-generic-password", "-U", "-s", service, "-a", account, "-w"]
             )
             return Secret(command=["security", "find-generic-password", "-s", service, "-w"])
         if self.platform.startswith("linux") and shutil.which("secret-tool"):
-            subprocess.run(
-                [
-                    "secret-tool",
-                    "store",
-                    "--label",
-                    f"busybar-calendar {service}",
-                    "service",
-                    service,
-                ],
-                check=True,
-            )
+            label = f"busybar-calendar {service}"
+            self._store(["secret-tool", "store", "--label", label, "service", service])
             return Secret(command=["secret-tool", "lookup", "service", service])
         print(f"No keychain here: set {env} in the environment the service runs in.")
         return Secret(env=env)
+
+    @staticmethod
+    def _store(command: list[str], attempts: int = 3) -> None:
+        """Run the keychain's own prompt; ask again when it fails, say a mistyped retype."""
+        for attempt in range(1, attempts + 1):
+            if subprocess.run(command, check=False).returncode == 0:
+                return
+            if attempt < attempts:
+                print("That was not stored (did the two entries differ?). Once more:")
+        raise ConfigError(f"{command[0]} did not store the password; run the command again")
 
 
 def _choose(ask: Ask, question: str, options: list[str], default: int = 1) -> int:

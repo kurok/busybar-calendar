@@ -105,6 +105,10 @@ class Runner:
                 continue
             self._events[source.name] = result
             logger.debug("%s: %d events", source.name, len(result))
+        # Forget the chimes of events that are gone, or a service that runs for
+        # months keeps every screen it ever showed.
+        current = {event.key for event in self.events}
+        self._sounded = {moment for moment in self._sounded if moment[1] in current}
 
     def _opened_at(self, screen: schedule.Screen) -> datetime:
         if screen.kind == "status":

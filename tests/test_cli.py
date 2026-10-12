@@ -296,3 +296,21 @@ def test_bare_command_shows_status_once_configured(tmp_path, monkeypatch, capsys
     assert cli.main(["-c", str(config)]) == 0
     assert seen == ["Feed"]
     assert "--help lists every command" in capsys.readouterr().out
+
+
+def test_a_failing_launchctl_is_one_line_not_a_traceback(tmp_path, monkeypatch, capsys):
+    import subprocess
+
+    from busybar_calendar import service
+
+    config = tmp_path / "config.toml"
+    config.write_text('[[sources]]\nname = "Feed"\ntype = "ics"\nurl = "https://x"\n')
+    monkeypatch.setattr(service, "_home", lambda: tmp_path)
+
+    def refuse(plan):
+        raise subprocess.CalledProcessError(5, ["launchctl", "bootstrap", "gui/501", "x.plist"])
+
+    monkeypatch.setattr(service, "install", refuse)
+    assert cli.main(["-c", str(config), "install", "--force"]) == 1
+    err = capsys.readouterr().err
+    assert "launchctl bootstrap gui/501 x.plist failed (exit 5)" in err
