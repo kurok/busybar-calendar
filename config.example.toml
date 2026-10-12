@@ -1,83 +1,39 @@
-# busybar-calendar configuration. Copy to config.toml and fill in.
+# An example busybar-calendar config. `busybar-calendar init` writes one for you;
+# every option, with its default, is in docs/configuration.md.
 
 [bar]
-# LAN address of the bar (Settings -> Wi-Fi -> your network -> View IP Address),
-# or 10.0.4.20 over USB. Leave it out to go through BUSY Cloud instead.
-address = "192.168.1.50"
-# The HTTP API password set on the bar's Network tab (sent as X-API-Token).
-# Without an address, a BUSY Cloud token with the "BUSY Bar" access scope.
-# Give one of: token, token_env, token_command.
-token_env = "BUSYBAR_TOKEN"
-# Above an active BUSY session (90), as Google Calendar events are.
-# priority = 91
+# Leave out `address` to reach the bar through BUSY Cloud, with a token that has
+# the "BUSY Bar" access scope. On your network: address = "192.168.1.50" and the
+# bar's HTTP API password as the token.
+token_command = ["security", "find-generic-password", "-s", "busybar-calendar-bar", "-w"]
 
-[sync]
-# poll_minutes = 5
-# lookahead_hours = 24
-# Events marked "free" do not make you busy.
-# skip_free = true
-# Timezone for event times that carry none. Defaults to this machine's.
-# timezone = "Europe/Kyiv"
-
-[display]
-# "small" fits the title and the countdown on two lines. "global" draws
-# Cyrillic, CJK and accented titles, on one line beside the countdown
-# (experimental: the published API schema allows ASCII only).
-# title_font = "small"
-# transliterate = true
-# The icon beside the title: "red_calendar" or the bar's own "animation".
-# event_icon = "red_calendar"
-# reminder_icon = "red_calendar"
-# A word beside the countdown while an event is on ("" for none).
-# busy_label = "BUSY"
-# busy_color = "#FF0000"
-
-# The settings the Google Calendar integration has per calendar, set once for
-# every calendar here, then overridden per source or per calendar below.
 [defaults.reminder]
-enabled = true
 minutes_before = 5
-sound = true
-show_name = true
 
 [defaults.status]
-enabled = true
-# "name" shows the event's title, or pick a status the bar has:
-# meeting, on_call, on_air, booked, dnd, flow, coding, lunch, keep_out,
-# back_soon, chill_time, low_social_battery
-show = "name"
-sound = true
-# Events you marked tentative ("maybe") put the busy status up too. Set false
-# to keep only their reminder; they then never make the bar say you are busy.
+# Events you marked tentative ("maybe") show as busy too; false keeps only
+# their reminder.
 tentative = true
 
-# A CalDAV account. iCloud: https://caldav.icloud.com with an app-specific
-# password (account.apple.com -> Sign-In and Security -> App-Specific Passwords).
-# Fastmail: https://caldav.fastmail.com with an app password.
-# Nextcloud: https://cloud.example.com/remote.php/dav
+# A CalDAV account: iCloud, Fastmail, Nextcloud, PrivateEmail, Radicale, ...
 [[sources]]
 name = "iCloud"
 type = "caldav"
 url = "https://caldav.icloud.com"
 username = "me@icloud.com"
-# Give one of: password, password_env, password_command (argv, no shell).
-password_command = ["security", "find-generic-password", "-s", "busybar-icloud", "-w"]
-# Which calendars to use: `busybar-calendar calendars` lists their ids and
-# names. Each entry is a name, an id or a URL; * and ? are wildcards.
-# Default: all. The one listed last wins when two events start together.
+password_command = ["security", "find-generic-password", "-s", "busybar-calendar-icloud", "-w"]
+# Which calendars: names or ids from `busybar-calendar calendars`, * wildcards.
 include = ["Home", "Work"]
-# Leave these out, after include:
-# exclude = ["Room *"]
 
-# Per-calendar overrides, keyed by name or by id.
+# One calendar shown as the bar's own "meeting" status, with an earlier reminder.
 [sources.calendars.Work.reminder]
 minutes_before = 10
 
 [sources.calendars.Work.status]
 show = "meeting"
 
-# A published ICS / webcal feed: one calendar, no credentials needed.
-# Outlook: Settings -> Calendar -> Shared calendars -> Publish a calendar.
+# A published ICS / webcal link: Outlook's "Publish a calendar", Google's secret
+# address in iCal format, a Proton share link.
 [[sources]]
 name = "Team"
 type = "ics"

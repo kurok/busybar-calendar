@@ -43,22 +43,31 @@ class _Strict(BaseModel):
 class ReminderSettings(_Strict):
     """A countdown shown before the event starts."""
 
-    enabled: bool = True
-    minutes_before: int = Field(default=5, ge=1, le=24 * 60)
-    sound: bool = True
-    show_name: bool = True
+    enabled: bool = Field(default=True, description="Show a reminder before events.")
+    minutes_before: int = Field(
+        default=5, ge=1, le=24 * 60, description="How long before the start it appears."
+    )
+    sound: bool = Field(default=True, description="Play the reminder sound as it appears.")
+    show_name: bool = Field(
+        default=True, description='Show the event\'s title; off, it says "Next event".'
+    )
 
 
 class StatusSettings(_Strict):
     """What the bar shows while the event is on."""
 
-    enabled: bool = True
-    # "name" shows the event's title; anything else is one of STOCK_STATUSES.
-    show: str = "name"
-    sound: bool = True
-    # Events you marked tentative ("maybe") show their status too. Turned
-    # off, they keep their reminder but do not make the bar say you are busy.
-    tentative: bool = True
+    enabled: bool = Field(default=True, description="Show the event while it is on.")
+    show: str = Field(
+        default="name",
+        description="`name`: the red calendar, the title, a countdown and BUSY. Or one of "
+        "the bar's own statuses: " + ", ".join(f"`{s}`" for s in STOCK_STATUSES) + ".",
+    )
+    sound: bool = Field(default=True, description="Play the event sound as it starts.")
+    tentative: bool = Field(
+        default=True,
+        description="Events you marked tentative show as busy too. Off, they keep their "
+        "reminder only.",
+    )
 
     @field_validator("show")
     @classmethod
@@ -118,16 +127,28 @@ def _secret(data: dict[str, Any], key: str) -> dict[str, Any]:
 
 
 class BarConfig(_Strict):
-    # LAN address of the bar. Leave it out to reach the bar through BUSY Cloud
-    # with a bar-scope token instead.
-    address: str | None = None
-    # The HTTP API password on the LAN (sent as X-API-Token), or the cloud
-    # token when there is no address.
-    token: Secret = Field(default_factory=Secret)
-    # Above an active BUSY session (90), like the Google integration's events.
-    priority: int = Field(default=91, ge=1, le=100)
-    # Also the app's id in the community gallery, which must match its folder.
-    application_name: str = Field(default="busybar-calendar", max_length=32)
+    address: str | None = Field(
+        default=None,
+        description="The bar on your network (`ip[:port]`; `10.0.4.20` over USB). Leave it "
+        "out to reach the bar through BUSY Cloud.",
+    )
+    token: Secret = Field(
+        default_factory=Secret,
+        description="With an address, the bar's HTTP API password (32 characters at most); "
+        'without, a BUSY Cloud token with the "BUSY Bar" access scope.',
+    )
+    priority: int = Field(
+        default=91,
+        ge=1,
+        le=100,
+        description="Draw priority: 91 is above a running BUSY session (90), like the bar's "
+        "own calendar events.",
+    )
+    application_name: str = Field(
+        default="busybar-calendar",
+        max_length=32,
+        description="The name drawings are made under; also the app's id in the community gallery.",
+    )
 
     @model_validator(mode="before")
     @classmethod
@@ -136,21 +157,41 @@ class BarConfig(_Strict):
 
 
 class DisplayConfig(_Strict):
-    # small fits two lines in 16px; global (Lana Pixel) draws Cyrillic, CJK and
-    # accents but takes the whole height for one line.
-    title_font: Literal["tiny", "small", "global"] = "small"
-    # Fold titles to ASCII for the bitmap fonts. Ignored for the global font.
-    transliterate: bool = True
-    reminder_sound: str = "shared/sounds/calendar_reminder_ends.snd"
-    event_sound: str = "shared/sounds/calendar_event_starts.snd"
-    # The icon beside the title: the bar's own calendar animations, or a red
-    # calendar drawn inline.
-    reminder_icon: Literal["animation", "red_calendar"] = "red_calendar"
-    event_icon: Literal["animation", "red_calendar"] = "red_calendar"
-    # A word beside the countdown while an event is on; "" for none. Not
-    # drawn with the global font, whose one line has no room for it.
-    busy_label: str = Field(default="BUSY", max_length=8)
-    busy_color: str = "#FF0000FF"
+    title_font: Literal["tiny", "small", "global"] = Field(
+        default="small",
+        description="`small` fits the title and countdown on two lines; `global` draws "
+        "Cyrillic, CJK and accents, on one line beside the countdown.",
+    )
+    transliterate: bool = Field(
+        default=True,
+        description="Fold titles to ASCII for the bitmap fonts (`Планування` -> "
+        "`Planuvannya`). Not used with `global`.",
+    )
+    reminder_sound: str = Field(
+        default="shared/sounds/calendar_reminder_ends.snd",
+        description="The stock sound a reminder plays.",
+    )
+    event_sound: str = Field(
+        default="shared/sounds/calendar_event_starts.snd",
+        description="The stock sound an event's start plays.",
+    )
+    reminder_icon: Literal["animation", "red_calendar"] = Field(
+        default="red_calendar",
+        description="The icon before an event: the red calendar, or the bar's own animation.",
+    )
+    event_icon: Literal["animation", "red_calendar"] = Field(
+        default="red_calendar",
+        description="The icon during an event: the red calendar, or the bar's own animation.",
+    )
+    busy_label: str = Field(
+        default="BUSY",
+        max_length=8,
+        description='The word beside the countdown during an event; `""` for none. Not drawn '
+        "with the `global` font.",
+    )
+    busy_color: str = Field(
+        default="#FF0000FF", description="Its colour, `#RRGGBB` or `#RRGGBBAA`."
+    )
 
     @field_validator("busy_label")
     @classmethod
@@ -169,31 +210,53 @@ class DisplayConfig(_Strict):
 
 
 class SyncConfig(_Strict):
-    poll_minutes: int = Field(default=5, ge=1)
-    lookahead_hours: int = Field(default=24, ge=1, le=24 * 14)
-    # Events marked free (TRANSP:TRANSPARENT) do not make you busy.
-    skip_free: bool = True
-    # Timezone for floating times. Defaults to this machine's.
-    timezone: str | None = None
+    poll_minutes: int = Field(default=5, ge=1, description="How often calendars are read.")
+    lookahead_hours: int = Field(
+        default=24, ge=1, le=24 * 14, description="How far ahead events are read."
+    )
+    skip_free: bool = Field(
+        default=True, description="Leave out events marked free (`TRANSP:TRANSPARENT`)."
+    )
+    timezone: str | None = Field(
+        default=None,
+        description="For event times that carry no timezone, e.g. `Europe/Kyiv`. Default: "
+        "this machine's.",
+    )
 
 
 class SourceConfig(Overrides):
-    name: str
-    type: Literal["caldav", "ics"]
-    url: str
-    username: str | None = None
-    password: Secret = Field(default_factory=Secret)
-    auth: Literal["basic", "digest"] = "basic"
-    # Attendee address(es) that are you, so an invitation you declined is
-    # skipped. Defaults to the username when that is an email address.
-    emails: list[str] = Field(default_factory=list)
-    # CalDAV only. Calendars to use (default: all) and to leave out, each
-    # entry a display name, an id (the URL's last segment) or a URL, with *
-    # and ? as wildcards. `busybar-calendar calendars` shows names and ids.
-    include: list[str] = Field(default_factory=list)
-    exclude: list[str] = Field(default_factory=list)
-    # Per-calendar overrides, keyed by display name or by id.
-    calendars: dict[str, Overrides] = Field(default_factory=dict)
+    name: str = Field(description="What logs and overrides call this source; unique.")
+    type: Literal["caldav", "ics"] = Field(
+        description="`caldav` for an account, `ics` for a published link (one calendar)."
+    )
+    url: str = Field(
+        description="CalDAV: the server, or one calendar's URL. ICS: the link; `webcal://` works."
+    )
+    username: str | None = Field(default=None, description="Usually the email address.")
+    password: Secret = Field(
+        default_factory=Secret,
+        description="iCloud and Fastmail need an app password.",
+    )
+    auth: Literal["basic", "digest"] = Field(
+        default="basic", description="HTTP authentication; a few servers want `digest`."
+    )
+    emails: list[str] = Field(
+        default_factory=list,
+        description="Your attendee address(es), to read your response to invitations. "
+        "Default: the username, when it is an email address.",
+    )
+    include: list[str] = Field(
+        default_factory=list,
+        description="CalDAV: only these calendars, by name, id or URL; `*` and `?` are "
+        "wildcards. Default: all. The one listed last wins an overlap.",
+    )
+    exclude: list[str] = Field(
+        default_factory=list, description="CalDAV: leave these calendars out, after include."
+    )
+    calendars: dict[str, Overrides] = Field(
+        default_factory=dict,
+        description="Per-calendar reminder and status overrides, keyed by name or id.",
+    )
 
     @model_validator(mode="before")
     @classmethod

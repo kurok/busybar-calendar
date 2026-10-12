@@ -149,14 +149,17 @@ They layer: `[defaults]` for every calendar, then per source, then per
 calendar (`[sources.calendars."Work".reminder]`). Setting a default once is
 the account-level setting BUSY Cloud does not have yet
 ([busybar-firmware#1083](https://github.com/busy-app/busybar-firmware/issues/1083)).
-All the options are in [`config.example.toml`](config.example.toml),
-including the look: `[display]` picks the icons (`event_icon`,
-`reminder_icon`: `red_calendar` or the bar's own `animation`) and the word
-beside the countdown during an event (`busy_label`, `busy_color`).
+Every option, with its default, is in the
+[configuration reference](docs/configuration.md);
+[`config.example.toml`](config.example.toml) shows the common ones together.
+`[display]` sets the look: the icons (`event_icon`, `reminder_icon`:
+`red_calendar` or the bar's own `animation`) and the word beside the
+countdown during an event (`busy_label`, `busy_color`).
 
 ## Documentation
 
 - [Setup](docs/setup.md) - the bar, calendar providers, secrets, running as a service, troubleshooting.
+- [Configuration reference](docs/configuration.md) - every option and its default, generated from the code.
 - [How it works](docs/how-it-works.md) - the design, the API calls, and what was measured on the hardware.
 
 ## Development

@@ -10,7 +10,8 @@ busybar-calendar status    # and later: is it running, and what is on the bar ne
 ```
 
 The rest of this page is what those commands do for you, for when you
-want to do it yourself, or need more than one calendar source.
+want to do it yourself, or need more than one calendar source. Every option
+of the config is in the [configuration reference](configuration.md).
 
 1. [Connect to the bar](#connect-to-the-bar)
 2. [Add your calendars](#add-your-calendars)
