@@ -56,6 +56,9 @@ class StatusSettings(_Strict):
     # "name" shows the event's title; anything else is one of STOCK_STATUSES.
     show: str = "name"
     sound: bool = True
+    # Events you marked tentative ("maybe") show their status too. Turned
+    # off, they keep their reminder but do not make the bar say you are busy.
+    tentative: bool = True
 
     @field_validator("show")
     @classmethod
@@ -139,6 +142,29 @@ class DisplayConfig(_Strict):
     transliterate: bool = True
     reminder_sound: str = "shared/sounds/calendar_reminder_ends.snd"
     event_sound: str = "shared/sounds/calendar_event_starts.snd"
+    # The icon beside the title: the bar's own calendar animations, or a red
+    # calendar drawn inline.
+    reminder_icon: Literal["animation", "red_calendar"] = "animation"
+    event_icon: Literal["animation", "red_calendar"] = "red_calendar"
+    # A word beside the countdown while an event is on; "" for none. Not
+    # drawn with the global font, whose one line has no room for it.
+    busy_label: str = Field(default="BUSY", max_length=8)
+    busy_color: str = "#FF0000FF"
+
+    @field_validator("busy_label")
+    @classmethod
+    def _ascii_label(cls, value: str) -> str:
+        if not all(" " <= c <= "~" for c in value):
+            raise ValueError("busy_label must be printable ASCII")
+        return value
+
+    @field_validator("busy_color")
+    @classmethod
+    def _rgba(cls, value: str) -> str:
+        digits = value.removeprefix("#")
+        if len(digits) not in (6, 8) or any(c not in "0123456789abcdefABCDEF" for c in digits):
+            raise ValueError("busy_color must be #RRGGBB or #RRGGBBAA")
+        return f"#{digits.upper()}" + ("FF" if len(digits) == 6 else "")
 
 
 class SyncConfig(_Strict):

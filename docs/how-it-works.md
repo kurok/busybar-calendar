@@ -59,6 +59,9 @@ until the start, and a **status** runs from the start to the end.
      a reminder for your next meeting replaces the status of the one still
      running, as long as you are as sure to attend the next one;
   3. then the calendar configured last.
+- An event you marked tentative puts the busy status up like any other,
+  unless `status.tentative = false`: then it keeps its reminder but never
+  shows as busy, and whatever else is on carries on.
 - Like Google: events of 24 hours or more, and all-day events, are not
   shown.
 - Also skipped: `STATUS:CANCELLED`, `TRANSP:TRANSPARENT` (free) unless
@@ -70,10 +73,19 @@ until the start, and a **status** runs from the start to the end.
 
 | Element | Reminder | Status (`show = "name"`) | Status (`show = "meeting"` etc.) |
 | --- | --- | --- | --- |
-| `cal_icon` | `shared/animations/calendar_reminder_16x16.anim` | `shared/animations/calendar_event_16x16.anim` | |
+| `cal_icon` | `shared/animations/calendar_reminder_16x16.anim` (default) | `shared/animations/calendar_event_16x16.anim` with `event_icon = "animation"` | |
+| `cal_xpm` | the red calendar with `reminder_icon = "red_calendar"` | the red calendar (default) | |
 | `cal_title` | title, `small` font, scrolls if long | title | |
 | `cal_time` | countdown to the start | countdown to the end | |
+| `cal_busy` | | `BUSY` in red, right-aligned on the countdown's line | |
 | `cal_status` | | | `shared/animations/<status>_72x16.anim` |
+
+The red calendar travels inside each drawing as an XPM2 `xpmbitmap`
+element (the firmware takes up to 32 colours, full colour on the front
+display), so nothing is uploaded to the bar. busylib 2.6 has no model for
+that element, so drawings are posted with `api_request` rather than
+`display_draw`. The icon is redrawn from Noto Emoji's 📅 at 16x16; see
+`icons.py` for the pixels and its licence.
 
 Sounds: `shared/sounds/calendar_reminder_ends.snd` when a reminder opens and
 `shared/sounds/calendar_event_starts.snd` when an event starts. Both can be

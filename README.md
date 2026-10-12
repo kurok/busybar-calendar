@@ -24,7 +24,7 @@ through `GET /api/screen`.
 | | |
 | --- | --- |
 | **Before the event** - the bar's calendar-reminder animation, the title, and a countdown to the start. | ![Reminder](docs/images/reminder.gif) |
-| **During the event** - the calendar-event animation, the title, and a countdown to the end ... | ![Status with the event name](docs/images/status.png) |
+| **During the event** - a red calendar, the title, a countdown to the end and a red **BUSY** ... | ![Status with the event name](docs/images/status.png) |
 | ... or one of the bar's own statuses, such as `meeting`, `on_call` or `dnd`. | ![Meeting status](docs/images/status-meeting.gif) |
 | **Long titles** scroll beside the icon. | ![Scrolling title](docs/images/long-title.gif) |
 | **Titles in other scripts** are transliterated for the bar's bitmap fonts (`Планування спринту` becomes `Planuvannya sprintu`) ... | ![Transliterated title](docs/images/cyrillic-transliterated.gif) |
@@ -110,12 +110,16 @@ The per-calendar settings are the Google Calendar integration's:
 | Status during events: on/off | `status.enabled` |
 | Event name, or a status from the list | `status.show`: `name`, `meeting`, `on_call`, `dnd`, ... |
 | Sound | `status.sound` |
+| *(not in Google's)* Busy status for events you marked tentative | `status.tentative` (default on) |
 
 They layer: `[defaults]` for every calendar, then per source, then per
 calendar (`[sources.calendars."Work".reminder]`). Setting a default once is
 the account-level setting BUSY Cloud does not have yet
 ([busybar-firmware#1083](https://github.com/busy-app/busybar-firmware/issues/1083)).
-All the options are in [`config.example.toml`](config.example.toml).
+All the options are in [`config.example.toml`](config.example.toml),
+including the look: `[display]` picks the icons (`event_icon`,
+`reminder_icon`: `red_calendar` or the bar's own `animation`) and the word
+beside the countdown during an event (`busy_label`, `busy_color`).
 
 ## Documentation
 
@@ -134,4 +138,7 @@ uv run ruff check . && uv run ruff format --check .
 
 ## License
 
-MIT
+MIT, except the red calendar icon in `src/busybar_calendar/icons.py`: it is
+redrawn from Google's [Noto Emoji](https://github.com/googlefonts/noto-emoji)
+📅 and stays under the SIL Open Font License 1.1
+([LICENSES/noto-emoji-OFL.txt](LICENSES/noto-emoji-OFL.txt)).

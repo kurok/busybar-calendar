@@ -87,7 +87,7 @@ async def main() -> None:
                 continue
             with contextlib.suppress(Exception):  # 400 when nothing of ours is up
                 await bar.display_clear(application_name=app)
-            await bar.display_draw(render.drawing(screen, display, app, config.bar.priority))
+            await render.send(bar, render.drawing(screen, display, app, config.bar.priority))
             await asyncio.sleep(2.5)  # let the cloud deliver it and the scroll begin
             frames, stamps = [], []
             for _ in range(count):

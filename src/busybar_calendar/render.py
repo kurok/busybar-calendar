@@ -1,10 +1,11 @@
 """
-The drawing for a screen, built from the stock calendar assets on the bar.
+The drawing for a screen.
 
-The front panel is 72x16. A reminder is the 16x16 calendar-reminder
-animation with the event's title beside it and a countdown to the start; the
-status during an event is the calendar-event animation with the title and a
-countdown to the end, or one of the bar's own 72x16 status animations.
+The front panel is 72x16. A reminder is a 16x16 calendar icon with the
+event's title beside it and a countdown to the start. The status during an
+event is the same with a countdown to the end and a red BUSY beside it, or
+one of the bar's own 72x16 status animations. The icon is the bar's own
+calendar animation or a red calendar drawn inline, per `[display]`.
 
 Every element carries `display_until`, so the bar takes the drawing down by
 itself even if this service has stopped - a minute after the screen ends
@@ -17,10 +18,13 @@ with the expiry a few seconds later, the icon stays).
 from __future__ import annotations
 
 import unicodedata
+from typing import Annotated, Any, Literal, Protocol
 
 from anyascii import anyascii
 from busylib import types
+from pydantic import BaseModel, Field
 
+from . import icons
 from .config import DisplayConfig
 from .schedule import Screen
 
@@ -32,6 +36,7 @@ EVENT_ANIMATION = "shared/animations/calendar_event_16x16.anim"
 HIDDEN_TITLE = "Next event"
 # How long a drawing outlives its screen if nothing replaces it; see above.
 EXPIRY_GRACE = 60
+DRAW_PATH = "/api/display/draw"
 
 # Rough glyph advance per font, only to decide whether a line must scroll.
 CHAR_WIDTH = {"tiny": 4, "small": 4, "global": 6}
@@ -46,16 +51,53 @@ TITLE_TOP_Y = {"tiny": 1, "small": 0}
 COUNTDOWN_BOTTOM_Y = 19
 # Beside an 11px global-font title, centred on the same rows (6-10).
 COUNTDOWN_MID_Y = 9
+# The BUSY label, in the small font on the countdown's rows (10-14): 8px
+# below the title's anchor, whose glyphs start 2px down.
+LABEL_TOP_Y = 8
 SCROLL_RATE = 1200
 SCROLL_START_DELAY = 1500
 SCROLL_REPEAT_DELAY = 2500
+
+
+class XpmBitmapElement(types.DisplayElementBase):
+    """An inline XPM2 image: in the bar's API, but not yet among busylib's models."""
+
+    type: Literal["xpmbitmap"] = "xpmbitmap"
+    data: str
+    opacity: int = Field(default=100, ge=0, le=100)
+
+
+Element = Annotated[
+    types.TextElement | types.AnimationElement | types.CountdownElement | XpmBitmapElement,
+    Field(discriminator="type"),
+]
+
+
+class Drawing(BaseModel):
+    """The body of POST /api/display/draw."""
+
+    application_name: str = Field(min_length=1, max_length=32)
+    priority: int = Field(ge=1, le=100)
+    elements: list[Element] = Field(min_length=1)
+
+    def payload(self) -> dict[str, Any]:
+        return self.model_dump(mode="json", exclude_none=True)
+
+
+class Poster(Protocol):
+    async def api_request(self, method: str, path: str, **kwargs: Any) -> Any: ...
+
+
+async def send(bar: Poster, drawing: Drawing) -> None:
+    """Draw on the bar - on the LAN or through BUSY Cloud, whichever `bar` reaches."""
+    await bar.api_request("POST", DRAW_PATH, json_payload=drawing.payload())
 
 
 def _drawable(c: str) -> bool:
     # No font has control characters, emoji or other pictographs; and
     # transliterated, an emoji becomes ":coffee:".
     category = unicodedata.category(c)
-    return category[0] != "C" and category != "So" and not "\ufe00" <= c <= "\ufe0f"
+    return category[0] != "C" and category != "So" and not "︀" <= c <= "️"
 
 
 def title_text(title: str, display: DisplayConfig) -> str:
@@ -87,22 +129,30 @@ def _text(
     )
 
 
-def _titled(
-    screen: Screen, animation: str, title: str, display: DisplayConfig, until: str
-) -> list[types.DisplayElement]:
-    """An animated calendar icon, a title, and a countdown to `screen.until`."""
-    countdown_to = str(int(screen.until.timestamp()))
-    elements: list[types.DisplayElement] = [
-        types.AnimationElement(
-            id="cal_icon",
-            stock_path=animation,
-            loop=True,
-            x=0,
-            y=0,
-            align="top_left",
-            display_until=until,
+def _icon(choice: str, animation: str, until: str) -> Element:
+    # Different ids for the two kinds: a draw updates elements by id, and an
+    # element is not turned from one kind into the other.
+    if choice == "red_calendar":
+        return XpmBitmapElement(
+            id="cal_xpm", data=icons.RED_CALENDAR, x=0, y=0, align="top_left", display_until=until
         )
-    ]
+    return types.AnimationElement(
+        id="cal_icon",
+        stock_path=animation,
+        loop=True,
+        x=0,
+        y=0,
+        align="top_left",
+        display_until=until,
+    )
+
+
+def _titled(
+    screen: Screen, icon: Element, title: str, display: DisplayConfig, until: str
+) -> list[Element]:
+    """A calendar icon, a title, a countdown to `screen.until` and, during an event, BUSY."""
+    countdown_to = str(int(screen.until.timestamp()))
+    elements: list[Element] = [icon]
     font = display.title_font
     if font == "global":
         # 11px leaves no second line: title and countdown share one.
@@ -136,21 +186,34 @@ def _titled(
             display_until=until,
         )
     )
+    if screen.kind == "status" and display.busy_label:
+        elements.append(
+            types.TextElement(
+                id="cal_busy",
+                text=display.busy_label,
+                font="small",
+                color=display.busy_color,
+                x=WIDTH,
+                y=LABEL_TOP_Y,
+                align="top_right",
+                display_until=until,
+            )
+        )
     return elements
 
 
-def elements(screen: Screen, display: DisplayConfig) -> list[types.DisplayElement]:
+def elements(screen: Screen, display: DisplayConfig) -> list[Element]:
     until = str(int(screen.until.timestamp()) + EXPIRY_GRACE)
     if screen.kind == "reminder":
         title = (
             title_text(screen.event.title, display) if screen.reminder.show_name else HIDDEN_TITLE
         )
-        return _titled(screen, REMINDER_ANIMATION, title, display, until)
+        icon = _icon(display.reminder_icon, REMINDER_ANIMATION, until)
+        return _titled(screen, icon, title, display, until)
 
     if screen.status.show == "name":
-        return _titled(
-            screen, EVENT_ANIMATION, title_text(screen.event.title, display), display, until
-        )
+        icon = _icon(display.event_icon, EVENT_ANIMATION, until)
+        return _titled(screen, icon, title_text(screen.event.title, display), display, until)
     return [
         types.AnimationElement(
             id="cal_status",
@@ -166,8 +229,8 @@ def elements(screen: Screen, display: DisplayConfig) -> list[types.DisplayElemen
 
 def drawing(
     screen: Screen, display: DisplayConfig, application_name: str, priority: int
-) -> types.DisplayElements:
-    return types.DisplayElements(
+) -> Drawing:
+    return Drawing(
         application_name=application_name,
         priority=priority,
         elements=elements(screen, display),

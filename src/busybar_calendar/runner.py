@@ -44,9 +44,7 @@ _UNKNOWN = object()
 
 
 class Bar(Protocol):
-    async def display_draw(
-        self, display_data: types.DisplayElements, **kwargs: Any
-    ) -> types.SuccessResponse: ...
+    async def api_request(self, method: str, path: str, **kwargs: Any) -> Any: ...
 
     async def display_clear(self, **kwargs: Any) -> types.SuccessResponse: ...
 
@@ -122,7 +120,7 @@ class Runner:
     async def clear(self) -> None:
         await self._clear()
 
-    async def _draw(self, drawing: types.DisplayElements) -> None:
+    async def _draw(self, drawing: render.Drawing) -> None:
         """
         Put a drawing up in place of the last one.
 
@@ -135,7 +133,7 @@ class Runner:
         if self._drawn is None or (self._drawn and self._drawn != ids):
             await self._clear()
         self._drawn = None  # unknown until the draw is confirmed
-        await self.bar.display_draw(drawing)
+        await render.send(self.bar, drawing)
         self._drawn = ids
 
     async def show(self, screen: schedule.Screen, *, chime: bool) -> None:

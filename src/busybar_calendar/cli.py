@@ -6,6 +6,7 @@ import argparse
 import asyncio
 import contextlib
 import dataclasses
+import json
 import logging
 import signal
 import sys
@@ -177,7 +178,7 @@ async def cmd_replay(config: Config, args: argparse.Namespace) -> int:
                 screen = schedule.Screen("reminder", moved, reminder, status)
                 await runner.show(screen, chime=not args.quiet)
             await _sleep_until(moved.start)
-            if status.enabled:
+            if schedule.shows_status(moved, status):
                 screen = schedule.Screen("status", moved, reminder, status)
                 await runner.show(screen, chime=not args.quiet)
             else:
@@ -208,14 +209,17 @@ async def cmd_demo(config: Config, args: argparse.Namespace) -> int:
     drawing = render.drawing(
         screen, config.display, config.bar.application_name, config.bar.priority
     )
-    print(drawing.model_dump_json(indent=2, exclude_none=True))
+    print(json.dumps(drawing.payload(), indent=2, ensure_ascii=False))
     bar = _bar(config)
     try:
-        await bar.display_draw(drawing)
+        with contextlib.suppress(Exception):  # 400 when nothing of ours is up
+            await bar.display_clear(application_name=config.bar.application_name)
+        await render.send(bar, drawing)
         if args.sound and (sound := render.sound(screen, config.display)):
             await bar.audio_play(stock_path=sound, application_name=config.bar.application_name)
         await asyncio.sleep(args.seconds)
-        await bar.display_clear(application_name=config.bar.application_name)
+        with contextlib.suppress(Exception):
+            await bar.display_clear(application_name=config.bar.application_name)
     finally:
         await bar.aclose()
     return 0

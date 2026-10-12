@@ -25,6 +25,12 @@ token_env = "BUSYBAR_TOKEN"
 # (experimental: the published API schema allows ASCII only).
 # title_font = "small"
 # transliterate = true
+# The icon beside the title: "red_calendar" or the bar's own "animation".
+# event_icon = "red_calendar"
+# reminder_icon = "animation"
+# A word beside the countdown while an event is on ("" for none).
+# busy_label = "BUSY"
+# busy_color = "#FF0000"
 
 # The settings the Google Calendar integration has per calendar, set once for
 # every calendar here, then overridden per source or per calendar below.
@@ -41,6 +47,9 @@ enabled = true
 # back_soon, chill_time, low_social_battery
 show = "name"
 sound = true
+# Events you marked tentative ("maybe") put the busy status up too. Set false
+# to keep only their reminder; they then never make the bar say you are busy.
+tentative = true
 
 # A CalDAV account. iCloud: https://caldav.icloud.com with an app-specific
 # password (account.apple.com -> Sign-In and Security -> App-Specific Passwords).

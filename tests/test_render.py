@@ -1,5 +1,6 @@
 from datetime import UTC, datetime, timedelta
 
+from busybar_calendar import icons
 from busybar_calendar.config import DisplayConfig, ReminderSettings, StatusSettings
 from busybar_calendar.events import CalendarRef, Event
 from busybar_calendar.render import drawing, sound, title_text
@@ -70,10 +71,51 @@ def test_global_font_shares_one_line():
 def test_status_name_counts_to_the_end():
     d = drawing(screen("status"), DisplayConfig(), "a", 91)
     elements = by_id(d)
-    assert elements["cal_icon"].stock_path == "shared/animations/calendar_event_16x16.anim"
     end = int(EVENT.end.timestamp())
     assert elements["cal_time"].timestamp == str(end)
     assert {e.display_until for e in d.elements} == {str(end + 60)}
+
+
+def test_status_has_the_red_calendar_and_busy():
+    elements = by_id(drawing(screen("status"), DisplayConfig(), "a", 91))
+    assert list(elements) == ["cal_xpm", "cal_title", "cal_time", "cal_busy"]
+    icon = elements["cal_xpm"]
+    assert (icon.type, icon.data) == ("xpmbitmap", icons.RED_CALENDAR)
+    busy = elements["cal_busy"]
+    assert (busy.text, busy.color, busy.font) == ("BUSY", "#FF0000FF", "small")
+    # Right-aligned on the countdown's line.
+    assert (busy.align, busy.x, busy.y) == ("top_right", 72, 8)
+
+
+def test_icons_and_label_follow_the_config():
+    display = DisplayConfig(event_icon="animation", busy_label="", reminder_icon="red_calendar")
+    status = by_id(drawing(screen("status"), display, "a", 91))
+    assert list(status) == ["cal_icon", "cal_title", "cal_time"]
+    assert status["cal_icon"].stock_path == "shared/animations/calendar_event_16x16.anim"
+    reminder = by_id(drawing(screen(), display, "a", 91))
+    assert "cal_xpm" in reminder
+    assert "cal_busy" not in reminder  # BUSY is for the event itself, not before it
+    custom = by_id(
+        drawing(screen("status"), DisplayConfig(busy_label="IN MTG", busy_color="#FF8800"), "a", 91)
+    )
+    assert (custom["cal_busy"].text, custom["cal_busy"].color) == ("IN MTG", "#FF8800FF")
+
+
+def test_no_busy_label_with_the_global_font():
+    elements = by_id(drawing(screen("status"), DisplayConfig(title_font="global"), "a", 91))
+    assert "cal_busy" not in elements
+
+
+def test_red_calendar_is_valid_xpm2():
+    lines = icons.RED_CALENDAR.splitlines()
+    assert lines[0] == "! XPM2"
+    width, height, colours, cpp = map(int, lines[1].split())
+    assert (width, height, cpp) == (16, 16, 1)
+    assert colours <= 32  # the firmware's limit
+    palette = {line[0] for line in lines[2 : 2 + colours]}
+    rows = lines[2 + colours :]
+    assert len(rows) == height
+    assert all(len(row) == width and set(row) <= palette for row in rows)
 
 
 def test_status_stock_animation():
@@ -92,7 +134,8 @@ def test_sounds_follow_settings():
 
 
 def test_payload_matches_the_wire_format():
-    payload = drawing(screen(), DisplayConfig(), "a", 91).model_dump(mode="json", exclude_none=True)
+    payload = drawing(screen("status"), DisplayConfig(), "a", 91).payload()
+    assert {e["type"] for e in payload["elements"]} == {"xpmbitmap", "text", "countdown"}
     for element in payload["elements"]:
         assert "timeout" not in element  # mutually exclusive with display_until
         assert element["display_until"].isdigit()

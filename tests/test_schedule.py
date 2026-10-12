@@ -115,3 +115,14 @@ def test_tentative_beats_unanswered_and_ties_fall_back_to_newest():
     assert choose(at(20), events, settings()).event.title == "Maybe"
     events = [answered("Maybe A", 0, 60, "tentative"), answered("Maybe B", 30, 30, "tentative")]
     assert choose(at(40), events, settings()).event.title == "Maybe B"
+
+
+def test_tentative_events_can_stay_off_the_busy_status():
+    events = [answered("Maybe", 10, 30, "tentative"), answered("Sure", 60, 30, "accepted")]
+    quiet = settings(status=StatusSettings(tentative=False))
+    # The reminder still comes, the status does not; accepted events are unaffected.
+    assert choose(at(6), events, quiet).kind == "reminder"
+    assert choose(at(20), events, quiet) is None
+    assert choose(at(70), events, quiet).kind == "status"
+    # By default a tentative event shows its status like any other.
+    assert choose(at(20), events, settings()).kind == "status"

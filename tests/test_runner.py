@@ -10,7 +10,8 @@ from busybar_calendar.runner import Runner
 T0 = datetime(2026, 10, 13, 9, 0, tzinfo=UTC)
 REF = CalendarRef("Work", "Work", 0)
 CONFIG = Config.model_validate({"sources": [{"name": "Work", "type": "ics", "url": "https://x"}]})
-TITLED = ("draw", ["cal_icon", "cal_title", "cal_time"])
+TITLED = ("draw", ["cal_icon", "cal_title", "cal_time"])  # the reminder
+BUSY = ("draw", ["cal_xpm", "cal_title", "cal_time", "cal_busy"])  # the status
 CLEAR = ("clear", "busybar_calendar")
 
 
@@ -20,11 +21,12 @@ class FakeBar:
         self.fail = 0
         self.someone_else_on_screen = False
 
-    async def display_draw(self, display_data, **kwargs):
+    async def api_request(self, method, path, json_payload=None, **kwargs):
+        assert (method, path) == ("POST", "/api/display/draw")
         if self.fail:
             self.fail -= 1
             raise ConnectionError("unreachable")
-        self.calls.append(("draw", [e.id for e in display_data.elements]))
+        self.calls.append(("draw", [e["id"] for e in json_payload["elements"]]))
 
     async def display_clear(self, **kwargs):
         if self.someone_else_on_screen:
@@ -77,10 +79,26 @@ async def test_full_life_of_an_event():
         CLEAR,  # whatever an earlier run left behind
         TITLED,
         ("sound", "calendar_reminder_ends.snd"),
-        TITLED,  # same element ids: updated in place, no clear, no flicker
+        CLEAR,  # the status has other elements: the red calendar and BUSY
+        BUSY,
         ("sound", "calendar_event_starts.snd"),
         CLEAR,
     ]
+
+
+async def test_same_elements_update_in_place():
+    config = Config.model_validate(
+        {
+            "display": {"event_icon": "animation", "busy_label": ""},
+            "sources": [{"name": "Work", "type": "ics", "url": "https://x"}],
+        }
+    )
+    runner, bar, _ = make([meeting()], config)
+    await runner.refresh(at(5))
+    await runner.tick(at(5))
+    await runner.tick(at(10))
+    # Reminder and status share their element ids: no clear, so no flicker.
+    assert [c for c in bar.calls if c[0] != "sound"] == [CLEAR, TITLED, TITLED]
 
 
 async def test_first_draw_after_start_clears_leftovers():
@@ -88,7 +106,7 @@ async def test_first_draw_after_start_clears_leftovers():
     await runner.refresh(at(20))
     await runner.tick(at(20))
     # Restarted mid-meeting: no chime, and the old run's drawing goes first.
-    assert bar.calls == [CLEAR, TITLED]
+    assert bar.calls == [CLEAR, BUSY]
 
 
 async def test_layout_change_clears_before_drawing():
@@ -147,7 +165,7 @@ async def test_failed_refresh_keeps_events():
     source.fail = True
     await runner.refresh(at(9))
     await runner.tick(at(12))
-    assert TITLED in bar.calls
+    assert BUSY in bar.calls
 
 
 async def test_renamed_event_redraws_without_chime():

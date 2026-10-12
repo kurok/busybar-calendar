@@ -49,6 +49,11 @@ class Screen:
         )
 
 
+def shows_status(event: Event, status: StatusSettings) -> bool:
+    """Whether the event puts its status up while it is on."""
+    return status.enabled and (status.tentative or event.response != "tentative")
+
+
 def _reminder_from(event: Event, reminder: ReminderSettings) -> datetime:
     return event.start - timedelta(minutes=reminder.minutes_before)
 
@@ -58,7 +63,7 @@ def choose(now: datetime, events: Iterable[Event], settings_for: SettingsFor) ->
     best_rank: tuple | None = None
     for event in events:
         reminder, status = settings_for(event)
-        if status.enabled and event.start <= now < event.end:
+        if shows_status(event, status) and event.start <= now < event.end:
             screen = Screen("status", event, reminder, status)
         elif reminder.enabled and _reminder_from(event, reminder) <= now < event.start:
             screen = Screen("reminder", event, reminder, status)

@@ -101,3 +101,18 @@ def test_secrets(monkeypatch):
         config.sources[0].password.resolve()
     with pytest.raises(ValidationError, match="only one of"):
         Config.model_validate(base(password="a", password_env="APP_PW"))
+
+
+def test_display_options_are_validated():
+    from busybar_calendar.config import DisplayConfig
+
+    assert DisplayConfig(busy_color="#ff0000").busy_color == "#FF0000FF"
+    for bad in ({"busy_color": "red"}, {"busy_label": "ЗАЙНЯТО"}, {"event_icon": "blue"}):
+        with pytest.raises(ValidationError):
+            DisplayConfig(**bad)
+
+
+def test_tentative_status_can_be_turned_off():
+    config = Config.model_validate(base(status={"tentative": False}))
+    _, status = config.settings_for("Work", "Work")
+    assert status.tentative is False
