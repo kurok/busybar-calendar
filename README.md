@@ -93,7 +93,8 @@ uv tool install .            # puts busybar-calendar on your PATH
 busybar-calendar init        # a few questions: the bar, the calendar; writes the config
 busybar-calendar add         # another calendar later: the same questions, appended
 busybar-calendar check       # the bar, its token and every calendar, in one go
-busybar-calendar install     # keep it running in the background (launchd / systemd)
+busybar-calendar install     # keep it running in the background (launchd / systemd);
+                             # restart it after a new password, uninstall to remove it
 busybar-calendar status      # is it running, what did it last do, what is on the bar next
                              # (status and check also speak --json, for scripts)
 ```
@@ -160,7 +161,8 @@ countdown during an event (`busy_label`, `busy_color`).
 
 ## Documentation
 
-- [Setup](docs/setup.md) - the bar, calendar providers, secrets, running as a service, troubleshooting.
+- [Setup](docs/setup.md) - the bar, calendar providers, secrets, running as a service.
+- [Troubleshooting](docs/troubleshooting.md) - what `check` and `status` say when something is wrong, and the fix.
 - [Configuration reference](docs/configuration.md) - every option and its default, generated from the code.
 - [Changelog](CHANGELOG.md) - what changed in each version.
 - [How it works](docs/how-it-works.md) - the design, the API calls, and what was measured on the hardware.

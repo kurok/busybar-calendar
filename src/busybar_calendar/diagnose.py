@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import contextlib
 import json
-from collections.abc import Callable
+import logging
+from collections.abc import Callable, Iterator
 from datetime import UTC, datetime, timedelta, tzinfo
 
 from busylib.client import AsyncBusyBar
@@ -27,20 +29,21 @@ async def _check_bar(config: Config, report: Report) -> None:
     try:
         try:
             version = await bar.version()
-        except Exception as error:
-            report(False, f"{where}: unreachable ({error})", area="bar", where=where)
-            return
-        try:
             firmware = await bar.status_firmware()
-        except BusyBarAPIError as error:
+        except BusyBarAPIError as error:  # it answered: the token, not the network
+            if error.status_code not in (401, 403):
+                report(False, f"{where}: {error}", area="bar", where=where)
+                return
             report(
                 False,
-                f"{where}: {error.status_code} on an authenticated call. "
-                f"{await _access_hint(bar, config, error)}",
+                f"{where}: refused ({error.status_code}). {await _access_hint(bar, config, error)}",
                 area="bar",
                 where=where,
                 status=error.status_code,
             )
+            return
+        except Exception as error:
+            report(False, f"{where}: unreachable ({error})", area="bar", where=where)
             return
         report(
             True,
@@ -93,14 +96,19 @@ async def _check_source(item: sources.Source, report: Report, tz: tzinfo) -> Non
                 calendars=[c.name for c in used],
                 available=len(found),
             )
+            available = ", ".join(c.name for c in found[:MAX_NAMES])
+            more = f" and {len(found) - MAX_NAMES} more" if len(found) > MAX_NAMES else ""
             for pattern in unmatched:
                 report(
                     False,
-                    f"{item.name}: no calendar matches {pattern!r}",
+                    f"{item.name}: no calendar matches {pattern!r}; there are: {available}{more}",
                     **where,
                     unmatched=pattern,
                 )
-        events = await item.fetch(now - timedelta(hours=24), now + timedelta(days=7))
+            if not used:
+                return  # no calendar is read, so there are no events to report on
+        with _quiet(sources.logger):  # its warnings repeat what is reported here
+            events = await item.fetch(now - timedelta(hours=24), now + timedelta(days=7))
     except Exception as error:
         report(False, f"{item.name}: {error}", **where)
         return
@@ -117,6 +125,19 @@ async def _check_source(item: sources.Source, report: Report, tz: tzinfo) -> Non
         events=len(ahead),
         next=_event_json(first, tz),
     )
+
+
+MAX_NAMES = 8
+
+
+@contextlib.contextmanager
+def _quiet(log: logging.Logger) -> Iterator[None]:
+    level = log.level
+    log.setLevel(logging.ERROR)
+    try:
+        yield
+    finally:
+        log.setLevel(level)
 
 
 def _iso(moment: datetime, tz: tzinfo) -> str:

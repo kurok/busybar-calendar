@@ -214,3 +214,61 @@ async def test_status_as_json(monkeypatch, capsys):
     nxt = data["calendar"]["next"]
     assert (nxt["kind"], nxt["title"], nxt["response"]) == ("reminder", "Retro", "tentative")
     assert datetime.fromisoformat(nxt["at"]) < datetime.fromisoformat(nxt["start"])
+
+
+async def test_check_tells_a_refused_token_from_an_unreachable_bar(monkeypatch, capsys):
+    class RefusingCloud(FakeBar):
+        async def version(self):  # the cloud wants a valid token for every call
+            raise BusyBarAPIError("Forbidden", status_code=403)
+
+    code, out = await check(monkeypatch, capsys, RefusingCloud())
+    assert code == 1
+    assert "refused (403)" in out and "cloud token is wrong" in out
+    assert "unreachable" not in out
+
+    class Offline(FakeBar):
+        async def version(self):
+            raise ConnectionError("no route to host")
+
+    code, out = await check(monkeypatch, capsys, Offline())
+    assert "unreachable (no route to host)" in out
+
+
+async def test_check_names_the_calendars_a_typo_could_have_meant(monkeypatch, capsys):
+    from zoneinfo import ZoneInfo
+
+    from busybar_calendar import sources
+    from busybar_calendar.caldav import RemoteCalendar
+
+    data = {
+        "sources": [{"name": "Work", "type": "caldav", "url": "https://x", "include": ["Wrok"]}]
+    }
+    config = Config.model_validate(data)
+    item = sources.CalDAVSource(config.sources[0], 0, ZoneInfo("UTC"), True)
+    found = [RemoteCalendar("https://x/1/", "Team"), RemoteCalendar("https://x/2/", "Work")]
+
+    async def calendars():
+        return found
+
+    async def fetch(start, end):
+        raise AssertionError("no calendar is used, so nothing should be fetched")
+
+    item.calendars, item.fetch = calendars, fetch
+    monkeypatch.setattr(connect, "make_bar", lambda _config: FakeBar())
+    monkeypatch.setattr(connect, "make_sources", lambda _config: [item])
+    assert await diagnose.check(config) == 1
+    out = capsys.readouterr().out
+    assert "no calendar matches 'Wrok'; there are: Team, Work" in out
+    assert "no events" not in out  # no false all-clear for a source that reads nothing
+    await item.aclose()
+
+
+def test_restart(monkeypatch, capsys):
+    from busybar_calendar import service
+
+    monkeypatch.setattr(service, "restart", lambda: True)
+    assert cli.main(["restart"]) == 0
+    assert "Restarted" in capsys.readouterr().out
+    monkeypatch.setattr(service, "restart", lambda: False)
+    assert cli.main(["restart"]) == 1
+    assert "Not installed" in capsys.readouterr().out

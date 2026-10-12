@@ -81,6 +81,15 @@ async def cmd_install(config: Config, args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_restart(_args: argparse.Namespace) -> int:
+    """Restart the background service, after a password or the config changed."""
+    if service.restart():
+        print("Restarted. `busybar-calendar status` shows how it is doing.")
+        return 0
+    print("Not installed: `busybar-calendar install` runs it in the background.")
+    return 1
+
+
 def cmd_uninstall(args: argparse.Namespace) -> int:
     plan = service.uninstall_plan()
     if args.dry_run:
@@ -200,6 +209,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     install.add_argument("--dry-run", action="store_true", help="show what it would do")
     install.add_argument("--force", action="store_true", help="install even if check fails")
+    commands.add_parser("restart", help="restart the background service, e.g. after a new password")
     uninstall = commands.add_parser("uninstall", help="stop and remove the background service")
     uninstall.add_argument("--dry-run", action="store_true", help="show what it would do")
     commands.add_parser("calendars", help="list the calendars each CalDAV source has")
@@ -235,6 +245,8 @@ def main(argv: list[str] | None = None) -> int:
     try:
         if args.command == "uninstall":  # needs no config: there may be none left
             return cmd_uninstall(args)
+        if args.command == "restart":
+            return cmd_restart(args)
         if args.command == "status":  # the service part needs no config
             try:
                 config = config_module.load(config_module.find(args.config))

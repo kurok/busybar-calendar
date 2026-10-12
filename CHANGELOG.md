@@ -6,6 +6,8 @@ All notable changes to busybar-calendar. The format follows
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-12
+
 ### Added
 
 - `busybar-calendar add`: another calendar source by the same questions as
@@ -14,6 +16,10 @@ All notable changes to busybar-calendar. The format follows
 - `--json` for `status` and `check`: the service, the screen now and next,
   and each check's finding with its fields (firmware, calendars, next event),
   with times in ISO 8601.
+- `busybar-calendar restart`, for the background service after a new
+  password or config.
+- [docs/troubleshooting.md](docs/troubleshooting.md): what `check` and
+  `status` say for each common problem, from real failures, and the fix.
 
 ### Changed
 
@@ -21,6 +27,14 @@ All notable changes to busybar-calendar. The format follows
   reads the new config.
 - `init` and `add` keep each account's password in a Keychain / libsecret
   entry of its own; two accounts on one domain no longer share one.
+
+### Fixed
+
+- `check` called a BUSY Cloud that refused the token "unreachable"; it now
+  says the token is wrong, revoked or lacks the BUSY Bar scope.
+- For a source whose `include` matched no calendar, `check` added a
+  reassuring "no events in the next 7 days"; it now lists the calendars
+  there are, and the source's own warnings no longer repeat in its output.
 
 ## [0.1.0] - 2026-10-12
 
@@ -67,5 +81,6 @@ Found on a bar running firmware 1.2.4, and recorded in
 - A refused draw (409) stopped the demo and replay.
 - A Ctrl-C during the slow first start printed a traceback.
 
-[Unreleased]: https://github.com/kurok/busybar-calendar/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/kurok/busybar-calendar/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/kurok/busybar-calendar/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/kurok/busybar-calendar/releases/tag/v0.1.0

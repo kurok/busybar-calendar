@@ -18,7 +18,7 @@ of the config is in the [configuration reference](configuration.md).
 3. [Keep secrets out of files](#keep-secrets-out-of-files)
 4. [Check it](#check-it)
 5. [Run it as a service](#run-it-as-a-service)
-6. [Troubleshooting](#troubleshooting)
+6. [Troubleshooting](troubleshooting.md)
 
 ## Connect to the bar
 
@@ -295,15 +295,5 @@ not there.
 
 ## Troubleshooting
 
-Start with `busybar-calendar check` (is the setup right?) and
-`busybar-calendar status` (is the service running, and what did it last log?).
-
-| Symptom | Cause |
-| --- | --- |
-| `403` from the bar on the LAN | The Wi-Fi HTTP API is disabled (`/api/access` says so), the password is wrong, or it is longer than 32 characters. `busybar-calendar check` tells which. |
-| `401` from the bar via the cloud | The token is not a BUSY Bar-scope token, or it was revoked. |
-| `check the credentials` from CalDAV | Wrong username or password. iCloud and Fastmail need an app password. The service stops on it rather than retrying. |
-| `no current-user-principal` | The server has no discovery at that URL: give a calendar's URL instead. |
-| An event never shows | It is all-day or 24 hours or longer, marked free (`skip_free`), cancelled, or declined. `upcoming` lists only what will show. |
-| `409` in the log | Something above `bar.priority` (default 91) is on screen; it is retried. |
-| A reminder shows late | The loop wakes on time; a late reminder means the event arrived late: lower `poll_minutes`, or check the feed's own refresh delay. |
+See [troubleshooting.md](troubleshooting.md): what `check` and `status` say
+for each common problem, and what to do about it.
