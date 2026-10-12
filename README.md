@@ -160,6 +160,7 @@ countdown during an event (`busy_label`, `busy_color`).
 
 - [Setup](docs/setup.md) - the bar, calendar providers, secrets, running as a service, troubleshooting.
 - [Configuration reference](docs/configuration.md) - every option and its default, generated from the code.
+- [Changelog](CHANGELOG.md) - what changed in each version.
 - [How it works](docs/how-it-works.md) - the design, the API calls, and what was measured on the hardware.
 
 ## Development

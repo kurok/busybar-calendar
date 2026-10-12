@@ -140,3 +140,13 @@ async def test_status_shows_now_and_next(monkeypatch, capsys, tmp_path):
     assert "reminder: Design review" in out  # the log tail
     assert "now status: Design review" in out
     assert "next reminder: Retro" in out
+
+
+def test_version(capsys):
+    from busybar_calendar import __version__
+
+    with pytest.raises(SystemExit) as done:
+        cli.main(["--version"])
+    assert done.value.code == 0
+    assert capsys.readouterr().out.strip() == f"busybar-calendar {__version__}"
+    assert __version__[0].isdigit()  # read from the installed package

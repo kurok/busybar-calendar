@@ -1,0 +1,55 @@
+# Changelog
+
+All notable changes to busybar-calendar. The format follows
+[Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
+[Semantic Versioning](https://semver.org/).
+
+## [Unreleased]
+
+## [0.1.0] - 2026-10-12
+
+The first release.
+
+### Added
+
+- Reminders and a BUSY status on the BUSY Bar from any CalDAV account
+  (iCloud, Fastmail, Nextcloud, PrivateEmail, Radicale, ...) or ICS / webcal
+  link, drawn through the bar's HTTP API on the LAN or through BUSY Cloud.
+- The Google Calendar integration's per-calendar settings - reminder time,
+  sound, show name, status during events - layered as defaults, per source
+  and per calendar.
+- A red calendar icon and a red BUSY beside the countdown during an event;
+  the bar's own animations and statuses (`meeting`, `on_call`, ...) as
+  options.
+- Overlapping events settled by your response: accepted over tentative over
+  not answered, then the newest event. `status.tentative` keeps tentative
+  events off the busy status.
+- Calendar filters: `include` / `exclude` by name, id or URL, with wildcards.
+- Commands: `init` (a few questions write the config, passwords go to the
+  Keychain or libsecret), `check` (the bar, its token and every calendar),
+  `install` / `uninstall` (launchd or systemd), `status` (running? now and
+  next), `calendars`, `upcoming`, `demo`, `replay`, `run`, `--version`.
+- `app.py`, following the BUSY Bar community gallery's rules: `--host`,
+  `--ics`, `--caldav`, `--demo`, `--test`, secrets from the environment.
+- Docs with screenshots read back from a real bar, and a configuration
+  reference generated from the code.
+
+### Fixed
+
+Found on a bar running firmware 1.2.4, and recorded in
+[docs/how-it-works.md](docs/how-it-works.md):
+
+- The countdown overlapped the title: its font sits 4px high in its box.
+- The status lost its icon when it replaced a reminder as the reminder's
+  `display_until` fired; drawings now outlive their screen by a minute.
+- A draw merges by element id, so a new layout could land on top of the old
+  one; a clear now comes first only when an element would be left over,
+  and a reminder becomes its event without a blink.
+- CalDAV discovery turned PROPFIND into GET on a 302 redirect.
+- A 401 or 404 from a calendar was retried forever; it now stops the
+  service with the reason.
+- A refused draw (409) stopped the demo and replay.
+- A Ctrl-C during the slow first start printed a traceback.
+
+[Unreleased]: https://github.com/kurok/busybar-calendar/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/kurok/busybar-calendar/releases/tag/v0.1.0

@@ -20,8 +20,8 @@ from zoneinfo import ZoneInfo
 from busylib.client import AsyncBusyBar
 from busylib.exceptions import BusyBarAPIError
 
+from . import __version__, render, schedule, service, sources, wizard
 from . import config as config_module
-from . import render, schedule, service, sources, wizard
 from .caldav import CalDAVError
 from .config import Config, ConfigError
 from .events import CalendarRef, Event
@@ -180,7 +180,7 @@ async def cmd_check(config: Config, _args: argparse.Namespace) -> int:
         problems += not good
         print(f"  {'ok ' if good else 'FAIL'} {text}")
 
-    print("Bar")
+    print(f"busybar-calendar {__version__}\nBar")
     await _check_bar(config, report)
     print("Calendars")
     items = _sources(config)
@@ -241,6 +241,7 @@ def _when(moment: datetime, now: datetime, tz: tzinfo) -> str:
 
 async def cmd_status(config: Config | None, _args: argparse.Namespace) -> int:
     """Is it running, what did it last do, and what is on the bar now and next."""
+    print(f"busybar-calendar {__version__}")
     state = service.status()
     if state.running:
         print(f"Service   running{f', pid {state.pid}' if state.pid else ''}")
@@ -542,6 +543,7 @@ def main(argv: list[str] | None = None) -> int:
         "then ~/.config/busybar-calendar/config.toml)",
     )
     parser.add_argument("-v", "--verbose", action="store_true")
+    parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     commands = parser.add_subparsers(dest="command", required=True)
     commands.add_parser("run", help="keep the bar in step with the calendars")
     init = commands.add_parser("init", help="answer a few questions to write the config")
