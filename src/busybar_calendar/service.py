@@ -19,6 +19,7 @@ import shlex
 import shutil
 import subprocess
 import sys
+import time
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -28,6 +29,7 @@ from .config import CONFIG_ENV
 LABEL = "app.busybar.calendar"
 UNIT = "busybar-calendar.service"
 RESTART_AFTER = 300  # seconds between restarts after the service stops
+GONE_WITHIN = 10.0  # seconds to wait for an unloaded launch agent to be gone
 
 
 @dataclass(frozen=True)
@@ -39,6 +41,8 @@ class Plan:
     commands: list[list[str]]  # must succeed
     cleanup: tuple[tuple[str, ...], ...] = ()  # run first, may fail: nothing to stop is fine
     log: Path | None = None
+    # Succeeds while the cleaned-up service is still there; commands wait until it fails.
+    gone: tuple[str, ...] = ()
 
 
 AUTO_UPDATE = "--auto-update"
@@ -131,6 +135,7 @@ def install_plan(config: Path, platform: str = sys.platform, auto_update: bool =
             [["launchctl", "bootstrap", domain, str(path)]],
             cleanup=(("launchctl", "bootout", f"{domain}/{LABEL}"),),  # an older one
             log=log,
+            gone=("launchctl", "print", f"{domain}/{LABEL}"),
         )
     if platform.startswith("linux"):
         path = _home() / ".config" / "systemd" / "user" / UNIT
@@ -167,11 +172,27 @@ def _cleanup(plan: Plan) -> None:
         subprocess.run(list(command), capture_output=True, check=False)
 
 
+def _wait_until_gone(plan: Plan, within: float = GONE_WITHIN) -> None:
+    """
+    `launchctl bootout` returns while the agent is still going away, and loading
+    it again before it has gone fails ("Bootstrap failed: 5: Input/output
+    error"): so a reinstall over a running agent waits for it to be gone.
+    """
+    if not plan.gone:
+        return
+    deadline = time.monotonic() + within
+    while subprocess.run(list(plan.gone), capture_output=True, check=False).returncode == 0:
+        if time.monotonic() >= deadline:
+            return  # loading it says what is wrong
+        time.sleep(0.25)
+
+
 def install(plan: Plan) -> None:
     plan.path.parent.mkdir(parents=True, exist_ok=True)
     if plan.log is not None:
         plan.log.parent.mkdir(parents=True, exist_ok=True)
     _cleanup(plan)
+    _wait_until_gone(plan)
     plan.path.write_bytes(plan.content)
     for command in plan.commands:
         subprocess.run(command, check=True)

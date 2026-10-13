@@ -18,7 +18,8 @@ def ran(monkeypatch):
 
     def fake_run(command, **kwargs):
         calls.append((list(command), kwargs.get("check", False)))
-        return service.subprocess.CompletedProcess(command, 0, "", "")
+        gone = command[:2] == ["launchctl", "print"]  # 113: no such service
+        return service.subprocess.CompletedProcess(command, 113 if gone else 0, "", "")
 
     monkeypatch.setattr(service.subprocess, "run", fake_run)
     return calls
@@ -58,7 +59,44 @@ def test_install_writes_then_loads(home, ran):
     assert plan.path.read_bytes() == plan.content
     assert plan.log.parent.is_dir()
     # Unloading an older agent may fail; loading the new one must not.
-    assert ran == [(list(plan.cleanup[0]), False), (plan.commands[0], True)]
+    assert ran == [
+        (list(plan.cleanup[0]), False),
+        (list(plan.gone), False),  # gone already: no wait
+        (plan.commands[0], True),
+    ]
+
+
+def test_a_reinstall_waits_for_the_old_agent_to_be_gone(home, monkeypatch):
+    calls, naps = [], []
+    still_there = iter([0, 0, 113])  # launchctl print: loaded, loaded, gone
+
+    def fake_run(command, **kwargs):
+        calls.append(command[1])
+        code = next(still_there) if command[1] == "print" else 0
+        return service.subprocess.CompletedProcess(command, code, "", "")
+
+    monkeypatch.setattr(service.subprocess, "run", fake_run)
+    monkeypatch.setattr(service.time, "sleep", naps.append)
+    service.install(service.install_plan(Path("c.toml"), "darwin"))
+    # Bootstrapping before the old agent is gone fails with exit 5.
+    assert calls == ["bootout", "print", "print", "print", "bootstrap"]
+    assert len(naps) == 2
+
+
+def test_the_wait_for_the_old_agent_is_bounded(home, monkeypatch):
+    clock = iter(range(100))
+    monkeypatch.setattr(service.time, "monotonic", lambda: next(clock))
+    monkeypatch.setattr(service.time, "sleep", lambda seconds: None)
+    calls = []
+
+    def fake_run(command, **kwargs):
+        calls.append(command[1])
+        return service.subprocess.CompletedProcess(command, 0, "", "")  # never gone
+
+    monkeypatch.setattr(service.subprocess, "run", fake_run)
+    service.install(service.install_plan(Path("c.toml"), "darwin"))
+    assert calls[-1] == "bootstrap"  # tried anyway after GONE_WITHIN, to say what is wrong
+    assert calls.count("print") <= service.GONE_WITHIN + 2
 
 
 def test_uninstall(home, ran):
