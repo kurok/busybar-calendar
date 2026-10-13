@@ -135,3 +135,47 @@ def test_timezone_is_checked_when_loading():
     with pytest.raises(ValidationError, match="not a timezone name"):
         Config.model_validate({**base(), "sync": {"timezone": "Europe/Kiyv"}})
     assert Config.model_validate({**base(), "sync": {"timezone": "Europe/Kyiv"}})
+
+
+def test_title_rules_layer_over_the_calendar_in_order():
+    config = Config.model_validate(
+        {
+            **base(calendars={"Team": {"status": {"show": "meeting"}}}),
+            "titles": [
+                {"match": "lunch*", "status": {"show": "lunch"}, "reminder": {"sound": False}},
+                {"match": ["Focus time", "Commute ?"], "reminder": {"enabled": False}},
+                {"match": "*", "reminder": {"minutes_before": 2}},
+            ],
+        }
+    )
+    reminder, status = config.settings_for("Work", "Team", title="Lunch with Alex")
+    assert (status.show, reminder.sound, reminder.minutes_before) == ("lunch", False, 2)
+    reminder, status = config.settings_for("Work", "Team", title="focus TIME")
+    assert (reminder.enabled, status.show) == (False, "meeting")
+    reminder, _ = config.settings_for("Work", "Team", title="Commute home")
+    assert reminder.enabled is True  # `?` is one character
+    _, status = config.settings_for("Work", "Team", title="Sync")
+    assert status.show == "meeting"
+
+
+def test_title_rules_need_a_match():
+    with pytest.raises(ValidationError, match="match"):
+        Config.model_validate({**base(), "titles": [{"reminder": {"enabled": False}}]})
+    with pytest.raises(ValidationError, match="match"):
+        Config.model_validate({**base(), "titles": [{"match": []}]})
+
+
+def test_a_bad_setting_says_where_it_is(tmp_path):
+    path = tmp_path / "c.toml"
+    path.write_text(
+        '[[sources]]\nname = "Work"\ntype = "ics"\nurl = "https://x"\n'
+        '[[titles]]\nmatch = "Lunch"\nstatus.show = "partying"\n'
+    )
+    with pytest.raises(ValidationError) as caught:
+        load(path)
+    (problem,) = caught.value.errors()
+    assert problem["loc"] == ("titles", 0, "status")
+    assert "show: show must be" in problem["msg"]
+    with pytest.raises(ValidationError) as caught:
+        Config.model_validate(base(calendars={"Team": {"reminder": {"minutes_before": 0}}}))
+    assert caught.value.errors()[0]["loc"] == ("sources", 0, "calendars", "Team", "reminder")

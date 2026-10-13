@@ -252,3 +252,21 @@ async def test_chimes_of_events_that_are_gone_are_forgotten():
     source.events = []  # the meeting is over and out of the window
     await runner.refresh(at(2000))
     assert runner._sounded == set()
+
+
+async def test_title_rules_keep_an_event_off_the_bar():
+    config = Config.model_validate(
+        {
+            "sources": [{"name": "Work", "type": "ics", "url": "https://x"}],
+            "titles": [
+                {"match": "Focus*", "reminder": {"enabled": False}, "status": {"enabled": False}}
+            ],
+        }
+    )
+    runner, bar, _ = make([meeting(title="Focus time"), meeting(60, title="Sync")], config)
+    await runner.refresh(at(0))
+    for minute in (6, 20):  # the focus block's reminder, then its middle
+        await runner.tick(at(minute))
+    assert bar.calls == [CLEAR]
+    await runner.tick(at(56))  # the Sync reminder still shows, with its sound
+    assert bar.calls[1:] == [TITLED, ("sound", "calendar_reminder_ends.snd")]

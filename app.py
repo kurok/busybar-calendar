@@ -127,7 +127,8 @@ def build_config(args: argparse.Namespace, path: Path | None) -> Config:
         sources.append(caldav)
 
     sound = not args.quiet
-    config = Config.model_validate(
+    # --minutes 0 fails here, not at the first event
+    return Config.model_validate(
         {
             "bar": bar,
             "defaults": {
@@ -137,8 +138,6 @@ def build_config(args: argparse.Namespace, path: Path | None) -> Config:
             "sources": sources,
         }
     )
-    config.check_settings()  # --minutes 0 fails here, not at the first event
-    return config
 
 
 def main(argv: list[str] | None = None) -> int:

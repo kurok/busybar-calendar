@@ -14,6 +14,7 @@ MODELS = [
     config.ReminderSettings,
     config.StatusSettings,
     config.SourceConfig,
+    config.TitleRule,
 ]
 
 
@@ -27,7 +28,8 @@ def test_configuration_reference_is_current():
 
 @pytest.mark.parametrize("model", MODELS, ids=lambda m: m.__name__)
 def test_every_option_is_described(model):
-    inherited = {"reminder", "status"} if model is config.SourceConfig else set()
+    overrides = model in (config.SourceConfig, config.TitleRule)
+    inherited = {"reminder", "status"} if overrides else set()
     missing = [
         name
         for name, field in model.model_fields.items()

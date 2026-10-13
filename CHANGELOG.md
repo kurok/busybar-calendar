@@ -6,6 +6,20 @@ All notable changes to busybar-calendar. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- `[[titles]]` rules: reminder and status settings for the events whose
+  title matches (`*` and `?` wildcards, any case), from any calendar, on top
+  of the calendar's own - to keep `Focus time` off the bar, or show `Lunch*`
+  as the bar's own lunch status. `upcoming` shows what each event ends up
+  with, and `demo --title` draws with the rules for that title.
+
+### Fixed
+
+- A bad reminder or status value now says where it is
+  (`sources.0.calendars.Team.reminder: minutes_before: ...`), not just which
+  key.
+
 ## [0.3.2] - 2026-10-12
 
 ### Changed

@@ -14,11 +14,21 @@ from __future__ import annotations
 import os
 import subprocess
 import tomllib
+from collections.abc import Iterable
+from fnmatch import fnmatchcase
 from pathlib import Path
 from typing import Any, Literal
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    ValidationError,
+    ValidationInfo,
+    field_validator,
+    model_validator,
+)
 
 # The 72x16 statuses the firmware ships, under shared/animations/<name>_72x16.anim.
 STOCK_STATUSES = (
@@ -83,6 +93,49 @@ class Overrides(_Strict):
 
     reminder: dict[str, Any] = Field(default_factory=dict)
     status: dict[str, Any] = Field(default_factory=dict)
+
+    @field_validator("reminder", "status")
+    @classmethod
+    def _valid(cls, value: dict[str, Any], info: ValidationInfo) -> dict[str, Any]:
+        """Check the values here, where an error can say which section it is in."""
+        model = ReminderSettings if info.field_name == "reminder" else StatusSettings
+        try:
+            model(**value)
+        except ValidationError as error:
+            problems = (
+                f"{'.'.join(map(str, p['loc']))}: {p['msg'].removeprefix('Value error, ')}"
+                for p in error.errors()
+            )
+            raise ValueError("; ".join(problems)) from None
+        return value
+
+
+def _merged(layers: Iterable[Overrides]) -> tuple[ReminderSettings, StatusSettings]:
+    reminder: dict[str, Any] = {}
+    status: dict[str, Any] = {}
+    for layer in layers:
+        reminder |= layer.reminder
+        status |= layer.status
+    return ReminderSettings(**reminder), StatusSettings(**status)
+
+
+class TitleRule(Overrides):
+    """Reminder/status overrides for the events whose title matches, from any calendar."""
+
+    match: list[str] = Field(
+        min_length=1,
+        description="The titles it applies to: one or a list; `*` and `?` are wildcards, "
+        "and case does not matter.",
+    )
+
+    @field_validator("match", mode="before")
+    @classmethod
+    def _one_or_many(cls, value: Any) -> Any:
+        return [value] if isinstance(value, str) else value
+
+    def applies_to(self, title: str) -> bool:
+        title = title.casefold()
+        return any(fnmatchcase(title, pattern.casefold()) for pattern in self.match)
 
 
 class Secret(_Strict):
@@ -297,6 +350,7 @@ class Config(_Strict):
     defaults: Overrides = Field(default_factory=Overrides)
     # Empty only for the gallery app's --demo and --test, which need no calendar.
     sources: list[SourceConfig] = Field(default_factory=list)
+    titles: list[TitleRule] = Field(default_factory=list)
 
     @model_validator(mode="after")
     def _unique_names(self) -> Config:
@@ -305,32 +359,21 @@ class Config(_Strict):
             raise ValueError("source names must be unique")
         return self
 
-    def check_settings(self) -> None:
-        """Build every calendar's settings now, so a bad value fails at start, not at the
-        first event."""
-        self.settings_for("", "")  # the defaults alone
-        for source in self.sources:
-            for calendar in [source.name, *source.calendars]:
-                self.settings_for(source.name, calendar)
-
     def settings_for(
-        self, source: str, calendar: str, calendar_id: str = ""
+        self, source: str, calendar: str, calendar_id: str = "", title: str = ""
     ) -> tuple[ReminderSettings, StatusSettings]:
         """
-        The effective settings of one calendar: defaults, then the source, then
-        the calendar's overrides by name, then by id.
+        The effective settings of one event: defaults, then the source, then the
+        calendar's overrides by name, then by id, then every `[[titles]]` rule
+        that matches the title, in order.
         """
         layers: list[Overrides] = [self.defaults]
         src = next((s for s in self.sources if s.name == source), None)
         if src is not None:  # an event of no configured source (a demo) gets the defaults
             layers.append(src)
             layers += [src.calendars[k] for k in (calendar, calendar_id) if k in src.calendars]
-        reminder: dict[str, Any] = {}
-        status: dict[str, Any] = {}
-        for layer in layers:
-            reminder |= layer.reminder
-            status |= layer.status
-        return ReminderSettings(**reminder), StatusSettings(**status)
+        layers += [rule for rule in self.titles if rule.applies_to(title)]
+        return _merged(layers)
 
 
 class ConfigError(Exception):
@@ -370,5 +413,4 @@ def load(path: str | Path) -> Config:
     config = Config.model_validate(data)
     if not config.sources:
         raise ConfigError(f"{path}: no [[sources]]: add a CalDAV account or an ICS feed")
-    config.check_settings()
     return config

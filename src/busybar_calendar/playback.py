@@ -173,7 +173,8 @@ async def demo(config: Config, args: argparse.Namespace) -> int:
     event = Event(
         "demo", args.title, start, start + timedelta(minutes=30), CalendarRef("demo", "demo", 0)
     )
-    reminder, status = config.settings_for(config.sources[0].name, config.sources[0].name)
+    first = config.sources[0].name
+    reminder, status = config.settings_for(first, first, title=args.title)
     if args.show:
         status = status.model_copy(update={"show": args.show})
     screen = schedule.Screen("status" if args.status else "reminder", event, reminder, status)

@@ -47,6 +47,8 @@ back to whatever it was showing.
   timezones and floating times handled.
 - **Google's per-calendar settings** (reminder time, sound, show name,
   status), set once as defaults and overridden per source or per calendar.
+- **Rules by title**, from any calendar: keep `Focus time` off the bar,
+  show `Lunch*` as the bar's own lunch status.
 - **Overlaps settled by your response**: an event you accepted wins over
   one you marked tentative, which wins over one you have not answered; then,
   as in Google's integration, the newest event wins.
@@ -131,6 +133,15 @@ They layer: `[defaults]` for every calendar, then per source, then per
 calendar (`[sources.calendars."Work".reminder]`); a default set once is the
 account-level setting BUSY Cloud does not have yet
 ([busybar-firmware#1083](https://github.com/busy-app/busybar-firmware/issues/1083)).
+Last come the `[[titles]]` rules, which match event titles in any calendar:
+
+```toml
+[[titles]]
+match = ["Focus time", "Commute*"]   # * and ? are wildcards; case does not matter
+reminder.enabled = false
+status.enabled = false
+```
+
 `[display]` sets the look: the icons (`red_calendar` or the bar's own
 `animation`) and the word beside the countdown (`busy_label`, `busy_color`).
 Every option, with its default, is in the

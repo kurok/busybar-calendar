@@ -58,7 +58,7 @@ What the bar shows.
 
 ## `[defaults.reminder]`
 
-The countdown before an event: the settings the bar's Google Calendar integration has per calendar. They layer: `[defaults.reminder]`, then a source's `[sources.reminder]`, then one calendar's `[sources.calendars."<name or id>".reminder]`.
+The countdown before an event: the settings the bar's Google Calendar integration has per calendar. They layer: `[defaults.reminder]`, then a source's `[sources.reminder]`, then one calendar's `[sources.calendars."<name or id>".reminder]`, then the `[[titles]]` rules that match the event's title.
 
 | Key | Default | |
 | --- | --- | --- |
@@ -69,7 +69,7 @@ The countdown before an event: the settings the bar's Google Calendar integratio
 
 ## `[defaults.status]`
 
-What the bar shows while an event is on. It layers the same way: `[defaults.status]`, `[sources.status]`, `[sources.calendars."<name or id>".status]`.
+What the bar shows while an event is on. It layers the same way: `[defaults.status]`, `[sources.status]`, `[sources.calendars."<name or id>".status]`, `[[titles]]`.
 
 | Key | Default | |
 | --- | --- | --- |
@@ -94,3 +94,28 @@ One CalDAV account or one ICS link each; at least one.
 | `include` | `[]` | CalDAV: only these calendars, by name, id or URL; `*` and `?` are wildcards. Default: all. The one listed last wins an overlap. |
 | `exclude` | `[]` | CalDAV: leave these calendars out, after include. |
 | `calendars` | `{}` | Per-calendar reminder and status overrides, keyed by name or id. |
+
+## `[[titles]]`
+
+Settings for the events whose title matches, from whichever calendar: a
+rule's `reminder` and `status` go on top of the calendar's, and a later rule
+on top of an earlier one. To keep some events off the bar, and show lunch as
+the bar's own status:
+
+```toml
+[[titles]]
+match = ["Focus time", "Commute*"]
+reminder.enabled = false
+status.enabled = false
+
+[[titles]]
+match = "Lunch*"
+reminder.enabled = false
+status.show = "lunch"
+```
+
+`busybar-calendar upcoming` shows what each event ends up with.
+
+| Key | Default | |
+| --- | --- | --- |
+| `match` | **required** | The titles it applies to: one or a list; `*` and `?` are wildcards, and case does not matter. |
