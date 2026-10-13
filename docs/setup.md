@@ -266,6 +266,8 @@ login, and again if it stops. On macOS that is a launch agent
   Keychain for `token_command` / `password_command`.
 - `--dry-run` shows the file and the commands without changing anything;
   `--force` installs even when `check` finds a problem.
+- `--auto-update` makes it [update itself](#updating-by-itself) every time
+  it starts.
 - `busybar-calendar uninstall` stops and removes it.
 
 `busybar-calendar status` shows how it is doing:
@@ -325,6 +327,34 @@ again, so `status` names the install to upgrade instead:
 
 It gives the `uv tool upgrade` command when that install is a uv tool from
 git, and says "upgrade that one" otherwise.
+
+#### Updating by itself
+
+```sh
+busybar-calendar install --auto-update
+```
+
+installs the service so that every start - at login, after a restart, or
+after it stopped - first runs `uv tool upgrade busybar-calendar`, then
+starts the newest version. It comes before the config is read, so a config
+that uses something new gets the version that understands it.
+
+- It needs the one-line install from git (`uv tool install
+  git+https://github.com/kurok/busybar-calendar`): that is the install
+  `uv tool upgrade` moves forward, to the newest commit on `main`. `install`
+  refuses `--auto-update` for any other install, and when there is no `uv`.
+- If the update fails - no network yet at login, say - the service starts
+  the version it has, and tries again at its next start. Each start logs
+  what happened:
+
+  ```
+  INFO busybar_calendar.update: auto-update: 0.5.1 (a0c7935) -> 0.6.1 (0046d3c)
+  INFO busybar_calendar: busybar-calendar 0.6.1 started: 1 calendar source(s), bar via BUSY Cloud
+  ```
+
+- So `busybar-calendar restart` is also how to update now, and `status`
+  says so: `Service   running 0.6.1, pid 4321, updates itself at each start`.
+- `install` without the flag turns it off again.
 
 ### Docker
 

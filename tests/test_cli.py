@@ -1,3 +1,4 @@
+import asyncio
 import json
 import sys
 from datetime import UTC, datetime
@@ -216,6 +217,7 @@ async def test_status_as_json(monkeypatch, capsys):
         "recent_log": ["Feed: 401, check the credentials"],
         "version": None,
         "python": "/opt/venv/bin/python",
+        "auto_update": False,
     }
     assert data["calendar"]["now"] is None
     nxt = data["calendar"]["next"]
@@ -607,3 +609,53 @@ def test_upcoming_notes_say_what_the_bar_does_and_why():
     assert notes("обід з командою") == "reminder 2m, status lunch, titles 'Обід*' '*'"
     config.titles.pop()  # without the catch-all, Focus time keeps nothing
     assert notes("Focus time") == "hidden, titles 'Focus*'"
+
+
+def test_run_auto_update_updates_before_reading_the_config(tmp_path, monkeypatch):
+    from busybar_calendar import update
+
+    order = []
+
+    class Restarted(Exception):
+        pass
+
+    def restart():
+        order.append("restart")
+        raise Restarted  # os.execv does not return
+
+    monkeypatch.setattr(update, "restart_into_update", restart)
+    monkeypatch.setattr(update, "update", lambda: order.append("update") or True)
+    monkeypatch.setenv(update.UPDATED_ENV, "")
+    command = ["-c", str(tmp_path / "missing.toml"), "run", "--auto-update"]
+    with pytest.raises(Restarted):  # even a config this version cannot read waits
+        cli.main(command)
+    assert order == ["update", "restart"]
+
+    order.clear()
+    monkeypatch.setenv(update.UPDATED_ENV, "1")  # the process the update restarted into
+    assert cli.main(command) == 1  # straight on to the config, which is missing
+    assert order == []
+
+    monkeypatch.setenv(update.UPDATED_ENV, "")
+    monkeypatch.setattr(update, "update", lambda: order.append("update") or False)
+    assert cli.main(command) == 1  # nothing new: on with the version it has
+    assert order == ["update"]
+    assert cli.main(command[:-1]) == 1  # plain `run` does not update
+    assert order == ["update"]
+
+
+def test_status_with_a_self_updating_service(monkeypatch, capsys):
+    from busybar_calendar import service
+
+    monkeypatch.setattr(service, "status", lambda: service.Status(True, True, pid=7))
+    monkeypatch.setattr(service, "recent_log", lambda state: [])
+    monkeypatch.setattr(service, "running_version", lambda state: "0.3.1")
+    monkeypatch.setattr(service, "installed_python", lambda: "/opt/tools/old/bin/python")
+    monkeypatch.setattr(service, "auto_updates", lambda: True)
+    data = asyncio.run(diagnose.status_data(None))
+    assert data["service"]["auto_update"] is True
+    diagnose.print_status(data)
+    out = capsys.readouterr().out
+    assert "running 0.3.1, pid 7, updates itself at each start" in out
+    assert "`busybar-calendar restart` updates it" in out
+    assert "uv tool upgrade" not in out

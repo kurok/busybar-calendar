@@ -7,7 +7,6 @@ import contextlib
 import json
 import logging
 import sys
-import tomllib
 from collections.abc import Callable, Iterator, Sequence
 from datetime import UTC, datetime, timedelta, tzinfo
 from pathlib import Path
@@ -15,7 +14,7 @@ from pathlib import Path
 from busylib.client import AsyncBusyBar
 from busylib.exceptions import BusyBarAPIError
 
-from . import __version__, connect, schedule, service, sources
+from . import __version__, connect, schedule, service, sources, update
 from .config import Config, ConfigError
 from .events import Event
 
@@ -247,6 +246,7 @@ async def status_data(
             "recent_log": service.recent_log(state),
             "version": service.running_version(state) if state.running else None,
             "python": service.installed_python() if state.installed else None,
+            "auto_update": service.auto_updates() if state.installed else False,
         },
         "config": {"path": str(path) if path else None, "problems": list(problems)},
         "bar": None,
@@ -281,11 +281,7 @@ def upgrade_command(python: str) -> str | None:
 
     A tool installed from a wheel file would reinstall that same file.
     """
-    receipt = Path(python).parent.parent / "uv-receipt.toml"
-    with contextlib.suppress(OSError, ValueError, LookupError, TypeError):
-        if "git" in tomllib.loads(receipt.read_text())["tool"]["requirements"][0]:
-            return "uv tool upgrade busybar-calendar"
-    return None
+    return " ".join(update.upgrade_command()) if update.from_git(python) else None
 
 
 def print_status(data: dict) -> None:
@@ -294,10 +290,16 @@ def print_status(data: dict) -> None:
     if svc["running"]:
         pid = f", pid {svc['pid']}" if svc["pid"] else ""
         running = svc.get("version")
-        print(f"Service   running{f' {running}' if running else ''}{pid}")
+        updating = ", updates itself at each start" if svc.get("auto_update") else ""
+        print(f"Service   running{f' {running}' if running else ''}{pid}{updating}")
         if running and running != data["version"]:
             python = svc.get("python")
-            if python and python != sys.executable:
+            if svc.get("auto_update"):
+                print(
+                    f"          that is {running}, not this {data['version']}: "
+                    "`busybar-calendar restart` updates it"
+                )
+            elif python and python != sys.executable:
                 # Another environment: restarting it starts the same old version again.
                 print(
                     f"          that is {running}, from {_environment(python)}, "

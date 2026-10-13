@@ -183,3 +183,49 @@ def test_restart_only_an_installed_service(home, ran):
     agent.write_text("<plist/>")
     service.restart("darwin")
     assert ran[0][0][:3] == ["launchctl", "kickstart", "-k"]
+
+
+@pytest.fixture
+def uv_from_git(monkeypatch):
+    monkeypatch.setattr(service.shutil, "which", lambda name: "/opt/uv/bin/uv")
+    monkeypatch.setattr(service.update, "from_git", lambda python: True)
+
+
+def test_a_self_updating_launchd_agent(home, uv_from_git):
+    plan = service.install_plan(Path("c.toml"), "darwin", auto_update=True)
+    agent = plistlib.loads(plan.content)
+    assert agent["ProgramArguments"][1:] == ["-m", "busybar_calendar", "run", "--auto-update"]
+    env = agent["EnvironmentVariables"]
+    # launchd's own PATH has neither uv nor its folder; git and `security` are in /usr/bin.
+    assert env["PATH"].split(":")[:2] == ["/opt/uv/bin", "/usr/local/bin"]
+    assert "/usr/bin" in env["PATH"].split(":")
+    assert Path(env["BUSYBAR_CALENDAR_CONFIG"]).is_absolute()
+    assert agent["RunAtLoad"] and agent["KeepAlive"]
+    assert not service.auto_updates("darwin")  # not installed yet
+    plan.path.parent.mkdir(parents=True)
+    plan.path.write_bytes(plan.content)
+    assert service.auto_updates("darwin")
+
+
+def test_a_self_updating_systemd_unit(home, uv_from_git):
+    plan = service.install_plan(Path("c.toml"), "linux", auto_update=True)
+    unit = plan.content.decode()
+    assert "-m busybar_calendar run --auto-update" in unit
+    assert "Environment=PATH=/opt/uv/bin:/usr/local/bin:/usr/bin:" in unit
+    plan.path.parent.mkdir(parents=True)
+    plan.path.write_bytes(plan.content)
+    assert service.auto_updates("linux")
+
+
+def test_auto_update_needs_uv_and_an_install_from_git(home, monkeypatch):
+    monkeypatch.setattr(service.shutil, "which", lambda name: None)
+    with pytest.raises(OSError, match="no uv on PATH"):
+        service.install_plan(Path("c.toml"), "darwin", auto_update=True)
+    monkeypatch.setattr(service.shutil, "which", lambda name: "/opt/uv/bin/uv")
+    monkeypatch.setattr(service.update, "from_git", lambda python: False)
+    with pytest.raises(OSError, match="installed from git"):
+        service.install_plan(Path("c.toml"), "darwin", auto_update=True)
+    # Without it, neither is needed, and the agent is as before.
+    agent = plistlib.loads(service.install_plan(Path("c.toml"), "darwin").content)
+    assert "PATH" not in agent["EnvironmentVariables"]
+    assert agent["ProgramArguments"][-1] == "run"

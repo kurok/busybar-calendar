@@ -6,6 +6,17 @@ All notable changes to busybar-calendar. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- `busybar-calendar install --auto-update`: the background service updates
+  itself every time it starts - at login, on `restart`, after it stopped -
+  with `uv tool upgrade busybar-calendar`, before it reads the config, then
+  runs the new version at once. A failed update (no network yet at login)
+  starts the version it has. It needs the one-line install from git, and
+  `install` says so when it is not that. `status` shows
+  `updates itself at each start`, and `--json` has `service.auto_update`.
+- `run --auto-update`, what such a service runs.
+
 ## [0.6.1] - 2026-10-13
 
 ### Fixed

@@ -15,7 +15,7 @@ from pathlib import Path
 import httpx
 from pydantic import ValidationError
 
-from . import __version__, connect, diagnose, playback, schedule, service, sources, wizard
+from . import __version__, connect, diagnose, playback, schedule, service, sources, update, wizard
 from . import config as config_module
 from .caldav import CalDAVError
 from .config import Config, ConfigError
@@ -117,7 +117,7 @@ async def cmd_demo(config: Config, args: argparse.Namespace) -> int:
 
 async def cmd_install(config: Config, args: argparse.Namespace) -> int:
     """Run the service in the background from now on: at login, restarted if it stops."""
-    plan = service.install_plan(args.config_path)
+    plan = service.install_plan(args.config_path, auto_update=args.auto_update)
     if args.dry_run:
         print(f"Would write {plan.path}:\n")
         print(plan.content.decode())
@@ -134,6 +134,8 @@ async def cmd_install(config: Config, args: argparse.Namespace) -> int:
     service.install(plan)
     print(f"Installed {plan.path}.")
     print("It runs at login, comes back if it stops, and reads", args.config_path.resolve())
+    if args.auto_update:
+        print(f"At every start and restart it first runs `{' '.join(update.upgrade_command())}`.")
     if plan.log:
         print(f"Log: {plan.log}")
     print("Remove it with: busybar-calendar uninstall")
@@ -311,6 +313,13 @@ def describe(error: BaseException) -> list[str]:
     return [str(error)]
 
 
+def _update_first() -> None:
+    """`run --auto-update`, before the config is read - a newer version may be what reads
+    it - and once: not again in the process an update restarts into."""
+    if not os.environ.get(update.UPDATED_ENV) and update.update():
+        update.restart_into_update()
+
+
 def _restart_after(code: int) -> int:
     """After the config changed: a running background service reads it only when it starts."""
     if code == 0 and service.restart():
@@ -330,7 +339,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     # No command: where you stand, and what to do next (see _where_you_stand).
     commands = parser.add_subparsers(dest="command")
-    commands.add_parser("run", help="keep the bar in step with the calendars")
+    run = commands.add_parser("run", help="keep the bar in step with the calendars")
+    run.add_argument(
+        "--auto-update",
+        action="store_true",
+        help="first update a uv tool installed from git to its latest version",
+    )
     init = commands.add_parser("init", help="answer a few questions to write the config")
     init.add_argument("--force", action="store_true", help="replace an existing config")
     commands.add_parser("add", help="add another calendar to the config, a few questions")
@@ -345,6 +359,11 @@ def main(argv: list[str] | None = None) -> int:
     )
     install.add_argument("--dry-run", action="store_true", help="show what it would do")
     install.add_argument("--force", action="store_true", help="install even if check fails")
+    install.add_argument(
+        "--auto-update",
+        action="store_true",
+        help="update to the latest version at every start and restart (uv tool from git)",
+    )
     commands.add_parser("restart", help="restart the background service, e.g. after a new password")
     uninstall = commands.add_parser("uninstall", help="stop and remove the background service")
     uninstall.add_argument("--dry-run", action="store_true", help="show what it would do")
@@ -397,6 +416,8 @@ def main(argv: list[str] | None = None) -> int:
             return _restart_after(wizard.run(path, overwrite=args.force))
         if args.command == "add":  # appends to the config
             return _restart_after(wizard.add(config_module.find(args.config)))
+        if args.command == "run" and args.auto_update:
+            _update_first()
         args.config_path = config_module.find(args.config)
         config = config_module.load(args.config_path)
         return asyncio.run(handlers[args.command](config, args))

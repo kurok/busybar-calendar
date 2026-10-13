@@ -16,11 +16,13 @@ import os
 import plistlib
 import re
 import shlex
+import shutil
 import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
 
+from . import update
 from .config import CONFIG_ENV
 
 LABEL = "app.busybar.calendar"
@@ -39,16 +41,42 @@ class Plan:
     log: Path | None = None
 
 
-def program() -> list[str]:
-    return [sys.executable, "-m", "busybar_calendar", "run"]
+AUTO_UPDATE = "--auto-update"
+# Where a service finds the tools it runs - git for uv, `security` for the
+# Keychain - behind the folder uv is in when it updates itself.
+SYSTEM_PATH = ("/usr/local/bin", "/usr/bin", "/bin", "/usr/sbin", "/sbin")
 
 
-def launchd_plist(command: list[str], config: Path, log: Path) -> bytes:
+def program(auto_update: bool = False) -> list[str]:
+    return [sys.executable, "-m", "busybar_calendar", "run", *([AUTO_UPDATE] * auto_update)]
+
+
+def _environment(config: Path, path: str | None) -> dict[str, str]:
+    return {CONFIG_ENV: str(config), **({"PATH": path} if path else {})}
+
+
+def update_path() -> str:
+    """The PATH a self-updating service needs: uv's folder first. Refuses an install
+    that cannot update itself, rather than one that fails at every start."""
+    uv = shutil.which("uv")
+    if uv is None:
+        raise OSError(f"{AUTO_UPDATE} runs `uv tool upgrade`, and there is no uv on PATH")
+    if not update.from_git(sys.executable):
+        raise OSError(
+            f"{AUTO_UPDATE} needs the uv tool installed from git - "
+            "uv tool install git+https://github.com/kurok/busybar-calendar - "
+            f"and this runs from {sys.executable}"
+        )
+    folders = [str(Path(uv).parent), *SYSTEM_PATH]
+    return os.pathsep.join(dict.fromkeys(folders))
+
+
+def launchd_plist(command: list[str], config: Path, log: Path, path: str | None = None) -> bytes:
     return plistlib.dumps(
         {
             "Label": LABEL,
             "ProgramArguments": command,
-            "EnvironmentVariables": {CONFIG_ENV: str(config)},
+            "EnvironmentVariables": _environment(config, path),
             "RunAtLoad": True,
             "KeepAlive": True,
             "ThrottleInterval": RESTART_AFTER,
@@ -65,13 +93,17 @@ def _systemd_quote(value: str) -> str:
     return '"' + value.replace("\\", "\\\\").replace('"', '\\"') + '"'
 
 
-def systemd_unit(command: list[str], config: Path) -> bytes:
+def systemd_unit(command: list[str], config: Path, path: str | None = None) -> bytes:
+    environment = "".join(
+        f"Environment={_systemd_quote(f'{key}={value}')}\n"
+        for key, value in _environment(config, path).items()
+    )
     return (
         "[Unit]\n"
         "Description=BUSY Bar calendar reminders\n"
         "After=network-online.target\n\n"
         "[Service]\n"
-        f"Environment={_systemd_quote(f'{CONFIG_ENV}={config}')}\n"
+        f"{environment}"
         f"ExecStart={' '.join(_systemd_quote(arg) for arg in command)}\n"
         "Restart=on-failure\n"
         f"RestartSec={RESTART_AFTER}\n\n"
@@ -84,15 +116,18 @@ def _home() -> Path:
     return Path.home()
 
 
-def install_plan(config: Path, platform: str = sys.platform) -> Plan:
+def install_plan(config: Path, platform: str = sys.platform, auto_update: bool = False) -> Plan:
+    """What `install` does; with `auto_update`, the service updates itself at each start."""
     config = config.resolve()
+    path_env = update_path() if auto_update else None
+    command = program(auto_update)
     if platform == "darwin":
         path = _home() / "Library" / "LaunchAgents" / f"{LABEL}.plist"
         log = _home() / "Library" / "Logs" / "busybar-calendar.log"
         domain = f"gui/{os.getuid()}"
         return Plan(
             path,
-            launchd_plist(program(), config, log),
+            launchd_plist(command, config, log, path_env),
             [["launchctl", "bootstrap", domain, str(path)]],
             cleanup=(("launchctl", "bootout", f"{domain}/{LABEL}"),),  # an older one
             log=log,
@@ -101,7 +136,7 @@ def install_plan(config: Path, platform: str = sys.platform) -> Plan:
         path = _home() / ".config" / "systemd" / "user" / UNIT
         return Plan(
             path,
-            systemd_unit(program(), config),
+            systemd_unit(command, config, path_env),
             [
                 ["systemctl", "--user", "daemon-reload"],
                 ["systemctl", "--user", "enable", "--now", UNIT],
@@ -247,18 +282,28 @@ def restart(platform: str = sys.platform) -> bool:
     return subprocess.run(command, capture_output=True, check=False).returncode == 0
 
 
-def installed_python(platform: str = sys.platform) -> str | None:
-    """The interpreter the installed service starts, read from its own file; None if unknown."""
+def installed_command(platform: str = sys.platform) -> list[str]:
+    """The command the installed service starts, read from its own file; [] if unknown."""
     path = uninstall_plan(platform).path
     try:
         if platform == "darwin":
-            return plistlib.loads(path.read_bytes())["ProgramArguments"][0]
+            return list(plistlib.loads(path.read_bytes())["ProgramArguments"])
         for line in path.read_text().splitlines():
             if line.startswith("ExecStart="):
-                return shlex.split(line.removeprefix("ExecStart="))[0]
-    except (OSError, ValueError, KeyError, IndexError, TypeError):
-        return None
-    return None
+                return shlex.split(line.removeprefix("ExecStart="))
+    except (OSError, ValueError, KeyError, TypeError):
+        return []
+    return []
+
+
+def installed_python(platform: str = sys.platform) -> str | None:
+    """The interpreter the installed service starts; None if unknown."""
+    return next(iter(installed_command(platform)), None)
+
+
+def auto_updates(platform: str = sys.platform) -> bool:
+    """Whether the installed service updates itself as it starts."""
+    return AUTO_UPDATE in installed_command(platform)
 
 
 STARTED = re.compile(r"busybar-calendar (\S+) started")

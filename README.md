@@ -94,7 +94,9 @@ start from [`config.example.toml`](config.example.toml).
 | `busybar-calendar uninstall` | Stop and remove the background service. |
 
 `status` and `check` also take `--json`, for scripts. A newer version is
-`uv tool upgrade busybar-calendar && busybar-calendar restart`.
+`uv tool upgrade busybar-calendar && busybar-calendar restart` - or, with
+`busybar-calendar install --auto-update`, the service fetches it by itself
+every time it starts or restarts.
 
 ## As a BUSY Bar gallery app
 
