@@ -6,6 +6,14 @@ All notable changes to busybar-calendar. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- A CalDAV account lists its calendars again every hour, to find new
+  ones; a timeout or server error at that moment no longer drops the whole
+  refresh. It goes on with the calendars it knows, says so in the log, and
+  lists them again at the next refresh. A refused password still stops the
+  service, as before.
+
 ## [0.6.0] - 2026-10-13
 
 ### Added

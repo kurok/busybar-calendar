@@ -152,23 +152,36 @@ class CalDAVSource(Source):
         self._http = http_client(self.config)
         self._client = CalDAVClient(self._http, self.config.url)
         self._calendars: list[RemoteCalendar] = []
-        self._refreshes = 0
+        self._since_listed = 0
         self._unmatched: list[str] = []
 
     async def calendars(self) -> list[RemoteCalendar]:
         """Every event calendar on the account, before `include` and `exclude`."""
         return await self._client.discover()
 
+    def _keep_known(self, error: Exception) -> None:
+        """Listing the calendars failed for now: go on with the ones known, if any."""
+        if not self._calendars:
+            raise error
+        logger.warning(
+            "%s: could not list the calendars (%s); going on with the ones it knows",
+            self.name,
+            error,
+        )
+
     async def _selected(self) -> list[tuple[int, RemoteCalendar]]:
-        if not self._calendars or self._refreshes % REDISCOVER_EVERY == 0:
+        if not self._calendars or self._since_listed >= REDISCOVER_EVERY:
             try:
                 self._calendars = await self.calendars()
+                self._since_listed = 0
             except CalDAVError as error:
                 # No status: discovery found no calendar where it was pointed.
                 if error.status is None or error.status in FATAL_STATUS:
                     raise FatalSourceError(f"{self.name}: {error}") from error
-                raise
-        self._refreshes += 1
+                self._keep_known(error)
+            except httpx.HTTPError as error:
+                self._keep_known(error)
+        self._since_listed += 1
         selected, unmatched = select(self._calendars, self.config.include, self.config.exclude)
         if unmatched != self._unmatched:
             if unmatched:

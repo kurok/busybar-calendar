@@ -168,3 +168,56 @@ async def test_wrong_url_or_password_is_fatal_but_a_server_error_is_not():
         with pytest.raises(FatalSourceError if fatal else CalDAVError):
             await source.fetch(start, start + timedelta(hours=1))
         await source.aclose()
+
+
+async def test_a_failed_relisting_keeps_the_known_calendars(caplog):
+    import httpx
+
+    from busybar_calendar.caldav import CalDAVAuthError, CalDAVError
+    from busybar_calendar.sources import REDISCOVER_EVERY, FatalSourceError
+
+    config = Config.model_validate(
+        {"sources": [{"name": "M", "type": "caldav", "url": "https://x", "include": ["4711"]}]}
+    )
+    start = datetime(2026, 10, 13, 9, 0, tzinfo=UTC)
+    window = (start - timedelta(hours=1), start + timedelta(hours=1))
+    source = CalDAVSource(config.sources[0], 0, ZoneInfo("UTC"), True)
+    client = FakeClient(ALL, {"4711": [ics("mine", start)]})
+    source._client = client
+    listed = []
+
+    async def discover():
+        listed.append(1)
+        return ALL
+
+    client.discover = discover
+    for _ in range(REDISCOVER_EVERY):
+        await source.fetch(*window)
+    assert len(listed) == 1  # listed once, then again only every REDISCOVER_EVERY
+
+    for hiccup in (CalDAVError("503", 503), httpx.ConnectTimeout("timed out")):
+
+        async def failing(error=hiccup):
+            raise error
+
+        client.discover = failing
+        events = await source.fetch(*window)  # due to list again; the server hiccups
+        assert [e.title for e in events] == ["mine"]
+        assert "going on with the ones it knows" in caplog.text
+
+    client.discover = discover
+    await source.fetch(*window)  # listed again at the very next refresh
+    assert len(listed) == 2
+
+    async def refused():
+        raise CalDAVAuthError("401", 401)
+
+    client.discover = refused
+    for _ in range(REDISCOVER_EVERY):
+        try:
+            await source.fetch(*window)
+        except FatalSourceError:
+            break  # a password that stopped working still stops the service
+    else:
+        raise AssertionError("a 401 while listing again must be fatal")
+    await source.aclose()
