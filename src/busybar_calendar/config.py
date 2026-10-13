@@ -133,9 +133,10 @@ class TitleRule(Overrides):
     def _one_or_many(cls, value: Any) -> Any:
         return [value] if isinstance(value, str) else value
 
-    def applies_to(self, title: str) -> bool:
+    def matching(self, title: str) -> str | None:
+        """The first of `match` that names this title, if one does."""
         title = title.casefold()
-        return any(fnmatchcase(title, pattern.casefold()) for pattern in self.match)
+        return next((p for p in self.match if fnmatchcase(title, p.casefold())), None)
 
 
 class Secret(_Strict):
@@ -372,8 +373,12 @@ class Config(_Strict):
         if src is not None:  # an event of no configured source (a demo) gets the defaults
             layers.append(src)
             layers += [src.calendars[k] for k in (calendar, calendar_id) if k in src.calendars]
-        layers += [rule for rule in self.titles if rule.applies_to(title)]
+        layers += [rule for rule in self.titles if rule.matching(title) is not None]
         return _merged(layers)
+
+    def title_patterns(self, title: str) -> list[str]:
+        """The `[[titles]]` patterns that name this title, one per rule that applies."""
+        return [p for rule in self.titles if (p := rule.matching(title)) is not None]
 
 
 class ConfigError(Exception):

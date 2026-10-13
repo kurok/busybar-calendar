@@ -6,6 +6,16 @@ All notable changes to busybar-calendar. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- `upcoming` names the `[[titles]]` patterns that apply to each event, so a
+  rule that hides or changes one shows why: `(hidden, titles 'Focus*')`.
+
+### Fixed
+
+- `upcoming` no longer lists `status` for a tentative event when
+  `status.tentative` is off; it shows only the reminder, as the bar does.
+
 ## [0.5.1] - 2026-10-13
 
 ### Fixed

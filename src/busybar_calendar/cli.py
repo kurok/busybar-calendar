@@ -19,6 +19,7 @@ from . import __version__, connect, diagnose, playback, schedule, service, sourc
 from . import config as config_module
 from .caldav import CalDAVError
 from .config import Config, ConfigError
+from .events import Event
 from .runner import Runner
 
 logger = logging.getLogger("busybar_calendar")
@@ -184,6 +185,23 @@ async def cmd_calendars(config: Config, _args: argparse.Namespace) -> int:
     return 0
 
 
+def upcoming_notes(config: Config, event: Event) -> str:
+    """What the bar does with an event, and why: its settings, your answer, its rules."""
+    ref = event.calendar
+    reminder, status = config.settings_for(ref.source, ref.name, ref.id, event.title)
+    notes = []
+    if reminder.enabled:
+        notes.append(f"reminder {reminder.minutes_before}m")
+    if schedule.shows_status(event, status):
+        notes.append(f"status {status.show}")
+    notes = notes or ["hidden"]
+    if event.response != "accepted":
+        notes.append(event.response)
+    if patterns := config.title_patterns(event.title):
+        notes.append("titles " + " ".join(map(repr, patterns)))
+    return ", ".join(notes)
+
+
 async def cmd_upcoming(config: Config, args: argparse.Namespace) -> int:
     now = datetime.now(UTC)
     runner = await connect.read_calendars(config, now)
@@ -191,19 +209,11 @@ async def cmd_upcoming(config: Config, args: argparse.Namespace) -> int:
     horizon = now + timedelta(hours=args.hours)
     shown = [e for e in runner.events if e.end > now and e.start < horizon]
     for event in sorted(shown, key=lambda e: e.start):
-        reminder, status = runner.settings_for(event)
         start = event.start.astimezone(tz)
         end = event.end.astimezone(tz)
-        notes = []
-        if reminder.enabled:
-            notes.append(f"reminder {reminder.minutes_before}m")
-        if status.enabled:
-            notes.append(f"status {status.show}")
-        if event.response != "accepted":
-            notes.append(event.response)
         print(
             f"{start:%a %d %b %H:%M}-{end:%H:%M}  [{event.calendar.source}/"
-            f"{event.calendar.name}]  {event.title}  ({', '.join(notes) or 'hidden'})"
+            f"{event.calendar.name}]  {event.title}  ({upcoming_notes(config, event)})"
         )
     screen = schedule.choose(now, runner.events, runner.settings_for)
     print(f"\nNow on the bar: {screen.kind + ': ' + screen.event.title if screen else 'nothing'}")

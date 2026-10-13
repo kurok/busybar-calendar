@@ -581,3 +581,29 @@ def test_status_with_no_config_file_still_says_how_to_make_one(tmp_path, monkeyp
     assert "no config yet" in capsys.readouterr().out
     assert cli.main(["-c", str(tmp_path / "none.toml"), "status", "--json"]) == 0
     assert json.loads(capsys.readouterr().out)["config"] == {"path": None, "problems": []}
+
+
+def test_upcoming_notes_say_what_the_bar_does_and_why():
+    config = Config.model_validate(
+        {
+            **SOURCES,
+            "defaults": {"status": {"tentative": False}},
+            "titles": [
+                {"match": "Focus*", "reminder": {"enabled": False}, "status": {"enabled": False}},
+                {"match": ["Lunch", "Обід*"], "status": {"show": "lunch"}},
+                {"match": "*", "reminder": {"minutes_before": 2}},
+            ],
+        }
+    )
+    now = datetime.now(UTC)
+    ref = CalendarRef("Feed", "Feed", 0)
+
+    def notes(title, response="accepted"):
+        return cli.upcoming_notes(config, Event("u", title, now, now, ref, response))
+
+    assert notes("Sync") == "reminder 2m, status name, titles '*'"
+    # Tentative, with status.tentative off: the reminder only, and the note says why.
+    assert notes("Sync", "tentative") == "reminder 2m, tentative, titles '*'"
+    assert notes("обід з командою") == "reminder 2m, status lunch, titles 'Обід*' '*'"
+    config.titles.pop()  # without the catch-all, Focus time keeps nothing
+    assert notes("Focus time") == "hidden, titles 'Focus*'"
