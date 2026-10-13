@@ -219,8 +219,14 @@ def test_restart_only_an_installed_service(home, ran):
     agent = home / "Library/LaunchAgents/app.busybar.calendar.plist"
     agent.parent.mkdir(parents=True)
     agent.write_text("<plist/>")
-    service.restart("darwin")
-    assert ran[0][0][:3] == ["launchctl", "kickstart", "-k"]
+    assert service.restart("darwin") is True
+    # Unloaded and loaded again: `kickstart -k` waits out the 5-minute throttle.
+    assert [command[:2] for command, _ in ran] == [
+        ["launchctl", "bootout"],
+        ["launchctl", "print"],  # gone: load it
+        ["launchctl", "bootstrap"],
+    ]
+    assert ran[-1][0][-1] == str(agent)
 
 
 @pytest.fixture

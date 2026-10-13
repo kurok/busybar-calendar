@@ -172,16 +172,16 @@ def _cleanup(plan: Plan) -> None:
         subprocess.run(list(command), capture_output=True, check=False)
 
 
-def _wait_until_gone(plan: Plan, within: float = GONE_WITHIN) -> None:
+def _wait_until_gone(gone: tuple[str, ...], within: float = GONE_WITHIN) -> None:
     """
     `launchctl bootout` returns while the agent is still going away, and loading
     it again before it has gone fails ("Bootstrap failed: 5: Input/output
-    error"): so a reinstall over a running agent waits for it to be gone.
+    error"): so a reinstall or restart waits for it to be gone.
     """
-    if not plan.gone:
+    if not gone:
         return
     deadline = time.monotonic() + within
-    while subprocess.run(list(plan.gone), capture_output=True, check=False).returncode == 0:
+    while subprocess.run(list(gone), capture_output=True, check=False).returncode == 0:
         if time.monotonic() >= deadline:
             return  # loading it says what is wrong
         time.sleep(0.25)
@@ -192,7 +192,7 @@ def install(plan: Plan) -> None:
     if plan.log is not None:
         plan.log.parent.mkdir(parents=True, exist_ok=True)
     _cleanup(plan)
-    _wait_until_gone(plan)
+    _wait_until_gone(plan.gone)
     plan.path.write_bytes(plan.content)
     for command in plan.commands:
         subprocess.run(command, check=True)
@@ -293,11 +293,20 @@ def recent_log(state: Status, lines: int = 5) -> list[str]:
 
 
 def restart(platform: str = sys.platform) -> bool:
-    """Restart an installed service so it reads a changed config; False if none is installed."""
-    if not uninstall_plan(platform).path.exists():
+    """Restart an installed service, at once; False if none is installed.
+
+    On macOS the agent is unloaded and loaded again: `kickstart -k` would wait
+    out ThrottleInterval - five minutes after the last start - before starting
+    it, and fails for an agent that is not loaded.
+    """
+    path = uninstall_plan(platform).path
+    if not path.exists():
         return False
     if platform == "darwin":
-        command = ["launchctl", "kickstart", "-k", f"gui/{os.getuid()}/{LABEL}"]
+        domain = f"gui/{os.getuid()}"
+        subprocess.run(["launchctl", "bootout", f"{domain}/{LABEL}"], capture_output=True)
+        _wait_until_gone(("launchctl", "print", f"{domain}/{LABEL}"))
+        command = ["launchctl", "bootstrap", domain, str(path)]
     else:
         command = ["systemctl", "--user", "restart", UNIT]
     return subprocess.run(command, capture_output=True, check=False).returncode == 0
