@@ -6,6 +6,8 @@ All notable changes to busybar-calendar. The format follows
 
 ## [Unreleased]
 
+## [0.6.1] - 2026-10-13
+
 ### Fixed
 
 - A CalDAV account lists its calendars again every hour, to find new
@@ -206,7 +208,8 @@ Found on a bar running firmware 1.2.4, and recorded in
 - A refused draw (409) stopped the demo and replay.
 - A Ctrl-C during the slow first start printed a traceback.
 
-[Unreleased]: https://github.com/kurok/busybar-calendar/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/kurok/busybar-calendar/compare/v0.6.1...HEAD
+[0.6.1]: https://github.com/kurok/busybar-calendar/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/kurok/busybar-calendar/compare/v0.5.1...v0.6.0
 [0.5.1]: https://github.com/kurok/busybar-calendar/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/kurok/busybar-calendar/compare/v0.4.0...v0.5.0
