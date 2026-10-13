@@ -72,9 +72,13 @@ Each `[[sources]]` entry is one CalDAV account or one ICS feed. A CalDAV
 account uses all of its calendars unless you [filter them](#choosing-calendars).
 
 `busybar-calendar add` adds one more by asking the same questions as `init`,
-and appends it to your config without touching the rest. A background
-service reads the config only when it starts, so `add` and `init` restart
-it when it is installed.
+and appends it to your config without touching the rest, then restarts a
+background service so it reads the new calendar at once.
+
+A running service also follows edits you make by hand: they apply within a
+minute. An edit that does not load leaves it on the config it has, and its
+log says what is wrong; a change under `[bar]` waits for
+`busybar-calendar restart`.
 
 ### CalDAV
 

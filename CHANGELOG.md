@@ -6,6 +6,14 @@ All notable changes to busybar-calendar. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- A running service follows edits to its config: they apply within a
+  minute, with the calendars read again at once and the screen redrawn
+  (without a second chime). An edit that does not load leaves the service
+  on the config it has, and the log says what is wrong; a change under
+  `[bar]` waits for `busybar-calendar restart`.
+
 ## [0.4.0] - 2026-10-13
 
 ### Added

@@ -24,8 +24,58 @@ from .runner import Runner
 logger = logging.getLogger("busybar_calendar")
 
 
-async def run_service(config: Config) -> int:
-    """Keep the bar in step with the calendars until a signal, or a source that cannot work."""
+def _stamp(path: Path) -> tuple[int, int] | None:
+    try:
+        stat = path.stat()
+    except OSError:
+        return None
+    return stat.st_mtime_ns, stat.st_size
+
+
+class ConfigWatch:
+    """
+    Puts an edited config to work in a running service, within a minute.
+
+    An edit that does not load leaves the service on the config it has, and
+    says why in the log. `[bar]` is read only at start: a change there waits
+    for `busybar-calendar restart`.
+    """
+
+    def __init__(self, path: Path, runner: Runner) -> None:
+        self.path = path
+        self.runner = runner
+        self._stamp = _stamp(path)
+
+    async def __call__(self) -> None:
+        stamp = _stamp(self.path)
+        if stamp == self._stamp:
+            return
+        self._stamp = stamp
+        running = self.runner.config
+        try:
+            config = config_module.load(self.path)
+            items = connect.make_sources(config)
+        except EXPECTED as error:
+            logger.warning(
+                "%s changed, but the service keeps the config it has: %s",
+                self.path,
+                "; ".join(describe(error)),
+            )
+            return
+        if config.bar != running.bar:
+            logger.warning("[bar] changed: `busybar-calendar restart` puts it to use")
+            config = config.model_copy(update={"bar": running.bar})
+        retired = self.runner.sources
+        self.runner.reconfigure(config, items)
+        await connect.close_all(retired)
+        logger.info("%s changed: reloaded, %d calendar source(s)", self.path, len(items))
+
+
+async def run_service(config: Config, path: Path | None = None) -> int:
+    """
+    Keep the bar in step with the calendars until a signal, or a source that
+    cannot work; with the config's `path`, follow its edits too.
+    """
     items = connect.make_sources(config)
     bar = connect.make_bar(config)
     stop = connect.stop_on_signals()
@@ -36,19 +86,20 @@ async def run_service(config: Config) -> int:
         len(items),
         config.bar.address or "via BUSY Cloud",
     )
+    runner = Runner(config, bar, items)
     try:
-        await Runner(config, bar, items).run(stop)
+        await runner.run(stop, ConfigWatch(path, runner) if path is not None else None)
     except sources.FatalSourceError as error:
         print(f"busybar-calendar: {error}", file=sys.stderr)
         return 1
     finally:
-        await connect.close_all(items)
+        await connect.close_all(runner.sources)
         await bar.aclose()
     return 0
 
 
-async def cmd_run(config: Config, _args: argparse.Namespace) -> int:
-    return await run_service(config)
+async def cmd_run(config: Config, args: argparse.Namespace) -> int:
+    return await run_service(config, args.config_path)
 
 
 async def cmd_check(config: Config, args: argparse.Namespace) -> int:

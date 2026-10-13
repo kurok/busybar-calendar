@@ -1,4 +1,5 @@
 import asyncio
+import itertools
 from datetime import UTC, datetime, timedelta
 
 from busylib.exceptions import BusyBarAPIError
@@ -270,3 +271,51 @@ async def test_title_rules_keep_an_event_off_the_bar():
     assert bar.calls == [CLEAR]
     await runner.tick(at(56))  # the Sync reminder still shows, with its sound
     assert bar.calls[1:] == [TITLED, ("sound", "calendar_reminder_ends.snd")]
+
+
+async def test_an_edited_config_redraws_at_once_without_a_second_chime():
+    runner, bar, _ = make([meeting()])
+    await runner.refresh(at(10))
+    await runner.tick(at(10))
+    assert bar.calls[1:] == [BUSY, ("sound", "calendar_event_starts.snd")]
+
+    edited = Config.model_validate(
+        {
+            "defaults": {"status": {"show": "meeting"}},
+            "sources": [{"name": "Work", "type": "ics", "url": "https://x"}],
+        }
+    )
+    fresh = FakeSource([meeting()])
+    runner.reconfigure(edited, [fresh])
+    assert runner.sources == [fresh] and runner.config is edited
+    await runner.refresh(at(10.5))
+    await runner.tick(at(10.5))
+    # The bar's own status in place of the titled screen: cleared first, no chime.
+    assert bar.calls[3:] == [CLEAR, ("draw", ["cal_status"])]
+
+
+async def test_reconfigure_keeps_the_events_of_sources_still_configured():
+    runner, _, _ = make([meeting()])
+    await runner.refresh(at(0))
+    runner.reconfigure(CONFIG, [FakeSource([])])  # same name: events kept until re-read
+    assert len(runner.events) == 1
+    renamed = FakeSource([])
+    renamed.name = "Home"
+    runner.reconfigure(CONFIG, [renamed])
+    assert runner.events == []
+
+
+async def test_run_calls_its_hook_at_every_wake():
+    runner, _, _ = make([])
+    clock = itertools.count()
+    runner.now = lambda: at(2 * next(clock))  # time flies: every sleep is the 0.2s floor
+    stop = asyncio.Event()
+    calls = []
+
+    async def hook():
+        calls.append(1)
+        if len(calls) == 2:
+            stop.set()
+
+    await asyncio.wait_for(runner.run(stop, hook), 2)
+    assert calls == [1, 1]

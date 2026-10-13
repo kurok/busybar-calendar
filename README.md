@@ -55,6 +55,8 @@ back to whatever it was showing.
 - **Google's filters**: no all-day or 24-hour-plus events. Also skipped:
   cancelled events, events marked free, invitations you declined.
 - **On time**: the loop wakes at the next change, not on the next poll.
+- **Live config**: the running service applies an edited config within a
+  minute; an edit that does not load is left out, and the log says why.
 - **Resilient**: a failing source keeps its last good events; a bar that
   cannot be reached is retried; drawings expire on the bar by themselves
   if the service stops.
@@ -84,7 +86,7 @@ start from [`config.example.toml`](config.example.toml).
 | `busybar-calendar status` | Is it running, what did it last log, what is on the bar now and next. |
 | `busybar-calendar check` | The bar, its token and every calendar, with what to fix. |
 | `busybar-calendar add` | Another calendar, by the same questions as `init`. |
-| `busybar-calendar restart` | After a new password: the service reads them when it starts. |
+| `busybar-calendar restart` | After a new password or a `[bar]` change; other config edits apply by themselves within a minute. |
 | `busybar-calendar upcoming` | The events the bar will show, and when; tentative ones marked. |
 | `busybar-calendar calendars` | What each CalDAV account has, with ids, for `include`. |
 | `busybar-calendar replay` | Tomorrow's events on the bar, a minute each. |

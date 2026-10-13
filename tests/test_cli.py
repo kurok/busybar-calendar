@@ -1,4 +1,5 @@
 import sys
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -6,7 +7,9 @@ from busylib import types
 from busylib.exceptions import BusyBarAPIError
 
 from busybar_calendar import cli, connect, diagnose
+from busybar_calendar import config as config_module
 from busybar_calendar.config import CONFIG_ENV, Config, ConfigError, find
+from busybar_calendar.events import CalendarRef, Event
 
 SOURCES = {"sources": [{"name": "Feed", "type": "ics", "url": "https://x"}]}
 
@@ -483,3 +486,60 @@ async def test_bar_health_cases(monkeypatch):
 
     monkeypatch.setattr(connect, "make_bar", no_bar)
     assert (await diagnose.bar_health(config))["answering"] is False
+
+
+WATCHED = """\
+[bar]
+address = "10.0.4.20"
+
+[[sources]]
+name = "Work"
+type = "ics"
+url = "https://example.com/work.ics"
+"""
+
+
+async def test_the_service_follows_config_edits(tmp_path, caplog):
+    from busybar_calendar.runner import Runner
+
+    now = datetime.now(UTC)
+    path = tmp_path / "config.toml"
+    path.write_text(WATCHED)
+    config = config_module.load(path)
+    runner = Runner(config, bar=None, sources=connect.make_sources(config))
+    watch = cli.ConfigWatch(path, runner)
+    try:
+        await watch()  # unchanged: nothing to do
+        assert runner.config is config
+
+        path.write_text(
+            WATCHED + '[[sources]]\nname = "Home"\ntype = "ics"\nurl = "https://example.com/h.ics"'
+            '\n\n[[titles]]\nmatch = "Lunch*"\nstatus.show = "lunch"\n'
+        )
+        await watch()
+        assert [s.name for s in runner.sources] == ["Work", "Home"]
+        assert (
+            runner.settings_for(Event("u", "Lunch", now, now, CalendarRef("Work", "Work", 0)))[
+                1
+            ].show
+            == "lunch"
+        )
+
+        applied = runner.config
+        path.write_text(WATCHED + '[[titles]]\nmatch = "Lunch"\nstatus.show = "partying"\n')
+        await watch()
+        assert runner.config is applied  # a broken edit is not applied...
+        assert "keeps the config it has" in caplog.text  # ...and the log says why
+        assert "titles.0.status: show:" in caplog.text
+
+        path.write_text(WATCHED.replace("10.0.4.20", "192.168.1.50"))
+        await watch()
+        assert runner.config.bar.address == "10.0.4.20"  # [bar] waits for a restart
+        assert "restart" in caplog.text
+        assert [s.name for s in runner.sources] == ["Work"]  # the rest is applied
+
+        path.unlink()
+        await watch()
+        assert [s.name for s in runner.sources] == ["Work"]
+    finally:
+        await connect.close_all(runner.sources)

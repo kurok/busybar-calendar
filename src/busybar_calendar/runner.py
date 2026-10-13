@@ -18,7 +18,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
-from collections.abc import Callable, Sequence
+from collections.abc import Awaitable, Callable, Sequence
 from datetime import UTC, datetime, timedelta
 from typing import Any, Protocol
 
@@ -111,6 +111,21 @@ class Runner:
         current = {event.key for event in self.events}
         self._sounded = {moment for moment in self._sounded if moment[1] in current}
 
+    def reconfigure(self, config: Config, sources: Sequence[Source]) -> None:
+        """
+        Carry on with an edited config: read the calendars again at once, and
+        redraw what is up - without a second chime for a screen that had one.
+        Events already read are kept for the sources still configured, should
+        the first read with the new config fail.
+        """
+        names = {source.name for source in sources}
+        self._events = {name: found for name, found in self._events.items() if name in names}
+        self.config = config
+        self.sources = list(sources)
+        self._settings.clear()
+        self._next_refresh = datetime.min.replace(tzinfo=UTC)
+        self._shown = _UNKNOWN
+
     def _opened_at(self, screen: schedule.Screen) -> datetime:
         if screen.kind == "status":
             return screen.event.start
@@ -187,9 +202,14 @@ class Runner:
             self._shown = _UNKNOWN
             self._drawn = None
 
-    async def run(self, stop: asyncio.Event) -> None:
+    async def run(
+        self, stop: asyncio.Event, before_each: Callable[[], Awaitable[None]] | None = None
+    ) -> None:
+        """Until `stop`; `before_each` runs at every wake, at least once a minute."""
         try:
             while not stop.is_set():
+                if before_each is not None:
+                    await before_each()
                 now = self.now()
                 if now >= self._next_refresh:
                     await self.refresh(now)
