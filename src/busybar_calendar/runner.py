@@ -116,7 +116,7 @@ class Runner:
             return screen.event.start
         return screen.event.start - timedelta(minutes=screen.reminder.minutes_before)
 
-    async def _clear(self) -> None:
+    async def clear(self) -> None:
         """Remove this service's drawing, and only this service's."""
         try:
             await self.bar.display_clear(application_name=self.app)
@@ -126,9 +126,6 @@ class Runner:
             if error.status_code != 400:
                 raise
         self._drawn = frozenset()
-
-    async def clear(self) -> None:
-        await self._clear()
 
     async def _draw(self, drawing: render.Drawing) -> None:
         """
@@ -142,7 +139,7 @@ class Runner:
         """
         ids = frozenset(element.id for element in drawing.elements)
         if self._drawn is None or not self._drawn <= ids:
-            await self._clear()
+            await self.clear()
         self._drawn = None  # unknown until the draw is confirmed
         await render.send(self.bar, drawing)
         self._drawn = ids
@@ -175,7 +172,7 @@ class Runner:
             return
         try:
             if screen is None:
-                await self._clear()
+                await self.clear()
                 logger.info("cleared")
             else:
                 # Chime once per screen, and only one that has just opened:
@@ -210,6 +207,6 @@ class Runner:
                     await asyncio.wait_for(stop.wait(), timeout)
         finally:
             try:
-                await self._clear()
+                await self.clear()
             except Exception as error:
                 logger.warning("could not clear the bar on exit: %s", error)

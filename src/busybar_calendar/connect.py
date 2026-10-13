@@ -12,6 +12,7 @@ from busylib.client import AsyncBusyBar
 
 from . import sources
 from .config import Config, ConfigError
+from .runner import Runner
 
 
 def floating_tz(config: Config) -> tzinfo:
@@ -42,6 +43,17 @@ def make_bar(config: Config) -> AsyncBusyBar:
 async def close_all(items: list[sources.Source]) -> None:
     for item in items:
         await item.aclose()
+
+
+async def read_calendars(config: Config, now: datetime) -> Runner:
+    """The events and their settings as the service sees them at `now`, with no bar."""
+    items = make_sources(config)
+    runner = Runner(config, bar=None, sources=items)  # type: ignore[arg-type]
+    try:
+        await runner.refresh(now)
+    finally:
+        await close_all(items)
+    return runner
 
 
 def stop_on_signals() -> asyncio.Event:

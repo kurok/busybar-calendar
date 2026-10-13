@@ -138,13 +138,8 @@ async def cmd_calendars(config: Config, _args: argparse.Namespace) -> int:
 
 
 async def cmd_upcoming(config: Config, args: argparse.Namespace) -> int:
-    items = connect.make_sources(config)
-    runner = Runner(config, bar=None, sources=items)  # type: ignore[arg-type]
     now = datetime.now(UTC)
-    try:
-        await runner.refresh(now)
-    finally:
-        await connect.close_all(items)
+    runner = await connect.read_calendars(config, now)
     tz = connect.floating_tz(config)
     horizon = now + timedelta(hours=args.hours)
     shown = [e for e in runner.events if e.end > now and e.start < horizon]

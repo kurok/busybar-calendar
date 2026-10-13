@@ -26,6 +26,7 @@ from pydantic import BaseModel, Field
 
 from . import icons
 from .config import DisplayConfig
+from .events import UNTITLED
 from .schedule import Screen
 
 WIDTH = 72
@@ -113,7 +114,7 @@ def title_text(title: str, display: DisplayConfig) -> str:
         if display.transliterate:
             title = anyascii(title)
         title = "".join(c for c in title if " " <= c <= "~")
-    title = " ".join(title.split()) or "Busy"
+    title = " ".join(title.split()) or UNTITLED
     if len(title) > MAX_TITLE:
         title = title[: MAX_TITLE - 3].rstrip() + "..."
     return title
@@ -160,42 +161,32 @@ def _titled(
     screen: Screen, icon: Element, title: str, display: DisplayConfig, until: str
 ) -> list[Element]:
     """A calendar icon, a title, a countdown to `screen.until` and, during an event, BUSY."""
-    countdown_to = str(int(screen.until.timestamp()))
-    elements: list[Element] = [icon]
     font = display.title_font
     if font == "global":
         # 11px leaves no second line: title and countdown share one.
         available = WIDTH - TEXT_X - COUNTDOWN_WIDTH - 1
-        elements.append(_text("cal_title", title, font, TEXT_X, 8, "mid_left", available, until))
-        elements.append(
-            types.CountdownElement(
-                id="cal_time",
-                timestamp=countdown_to,
-                direction="time_left",
-                show_hours="when_non_zero",
-                x=WIDTH - 1,
-                y=COUNTDOWN_MID_Y,
-                align="mid_right",
-                display_until=until,
-            )
-        )
-        return elements
-    available = WIDTH - TEXT_X
-    top = TITLE_TOP_Y[font]
-    elements.append(_text("cal_title", title, font, TEXT_X, top, "top_left", available, until))
-    elements.append(
+        title_at = (TEXT_X, 8, "mid_left")
+        countdown_at = (WIDTH - 1, COUNTDOWN_MID_Y, "mid_right")
+    else:
+        available = WIDTH - TEXT_X
+        title_at = (TEXT_X, TITLE_TOP_Y[font], "top_left")
+        countdown_at = (TEXT_X, COUNTDOWN_BOTTOM_Y, "bottom_left")
+    elements: list[Element] = [
+        icon,
+        _text("cal_title", title, font, *title_at, available, until),
         types.CountdownElement(
             id="cal_time",
-            timestamp=countdown_to,
+            timestamp=str(int(screen.until.timestamp())),
             direction="time_left",
             show_hours="when_non_zero",
-            x=TEXT_X,
-            y=COUNTDOWN_BOTTOM_Y,
-            align="bottom_left",
+            x=countdown_at[0],
+            y=countdown_at[1],
+            align=countdown_at[2],
             display_until=until,
-        )
-    )
-    if screen.kind == "status" and display.busy_label:
+        ),
+    ]
+    # Beside a global-font title there is no room left for the label.
+    if screen.kind == "status" and display.busy_label and font != "global":
         elements.append(
             types.TextElement(
                 id="cal_busy",

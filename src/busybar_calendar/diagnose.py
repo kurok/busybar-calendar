@@ -18,7 +18,6 @@ from busylib.exceptions import BusyBarAPIError
 from . import __version__, connect, schedule, service, sources
 from .config import Config, ConfigError
 from .events import Event
-from .runner import Runner
 
 LAN_TOKEN_LIMIT = 32  # the firmware refuses longer X-API-Token values
 
@@ -250,13 +249,8 @@ async def status_data(config: Config | None) -> dict:
     if config is None:
         return data
     data["bar"] = await bar_health(config)
-    items = connect.make_sources(config)
-    runner = Runner(config, bar=None, sources=items)  # type: ignore[arg-type]
     now = datetime.now(UTC)
-    try:
-        await runner.refresh(now)
-    finally:
-        await connect.close_all(items)
+    runner = await connect.read_calendars(config, now)
     tz = connect.floating_tz(config)
     screen = schedule.choose(now, runner.events, runner.settings_for)
     following = schedule.upcoming(now, runner.events, runner.settings_for)
