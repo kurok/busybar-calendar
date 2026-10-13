@@ -1,3 +1,4 @@
+import json
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
@@ -159,7 +160,6 @@ def test_version(capsys):
 
 async def test_check_as_json(monkeypatch, capsys):
     import argparse
-    import json
 
     config = Config.model_validate(SOURCES)
     monkeypatch.setattr(connect, "make_bar", lambda _config: FakeBar())
@@ -174,8 +174,6 @@ async def test_check_as_json(monkeypatch, capsys):
 
 
 async def test_status_as_json(monkeypatch, capsys):
-    import argparse
-    import json
     from datetime import UTC, datetime, timedelta
 
     from busybar_calendar import service
@@ -207,7 +205,7 @@ async def test_status_as_json(monkeypatch, capsys):
 
     monkeypatch.setattr(connect, "make_sources", lambda config: [Source()])
     monkeypatch.setattr(connect, "make_bar", lambda config: FakeBar())
-    await cli.cmd_status(Config.model_validate(SOURCES), argparse.Namespace(json=True))
+    await diagnose.status(Config.model_validate(SOURCES), as_json=True)
     data = json.loads(capsys.readouterr().out)
     assert data["service"] == {
         "installed": True,
@@ -297,7 +295,7 @@ def test_bare_command_shows_status_once_configured(tmp_path, monkeypatch, capsys
     config.write_text('[[sources]]\nname = "Feed"\ntype = "ics"\nurl = "https://x"\n')
     seen = []
 
-    async def fake_status(loaded, as_json=False):
+    async def fake_status(loaded, as_json=False, **where):
         seen.append(loaded.sources[0].name)
         return 0
 
@@ -459,6 +457,7 @@ async def test_status_says_when_the_bar_does_not_answer(monkeypatch, capsys):
             "recent_log": [],
             "version": None,
         },
+        "config": {"path": None, "problems": []},
         "bar": health,
         "calendar": None,
     }
@@ -543,3 +542,42 @@ async def test_the_service_follows_config_edits(tmp_path, caplog):
         assert [s.name for s in runner.sources] == ["Work"]
     finally:
         await connect.close_all(runner.sources)
+
+
+def test_status_reports_a_config_that_does_not_load(tmp_path, monkeypatch, capsys):
+    from busybar_calendar import service
+
+    monkeypatch.setattr(service, "status", lambda: service.Status(True, True, pid=7))
+    monkeypatch.setattr(service, "recent_log", lambda state: [])
+    monkeypatch.setattr(service, "running_version", lambda state: None)
+    monkeypatch.setattr(service, "installed_python", lambda: None)
+    path = tmp_path / "config.toml"
+    path.write_text(WATCHED + '[[titles]]\nmatch = "Lunch"\nstatus.show = "partying"\n')
+
+    assert cli.main(["-c", str(path), "status"]) == 1
+    out = capsys.readouterr().out
+    assert "Service   running, pid 7" in out  # the service part still shows
+    assert f"Config    does not load: {path}" in out
+    assert "the running service keeps the config it last loaded" in out
+    assert "titles.0.status: show: show must be" in out
+    assert "no config yet" not in out
+
+    assert cli.main(["-c", str(path), "status", "--json"]) == 1
+    data = json.loads(capsys.readouterr().out)
+    assert data["config"]["path"] == str(path)
+    assert data["config"]["problems"][0].startswith("titles.0.status: show:")
+    assert data["service"]["running"] is True
+
+    assert cli.main(["-c", str(path)]) == 1  # the bare command too, not first steps
+    assert "does not load" in capsys.readouterr().out
+
+
+def test_status_with_no_config_file_still_says_how_to_make_one(tmp_path, monkeypatch, capsys):
+    from busybar_calendar import service
+
+    monkeypatch.setattr(service, "status", lambda: service.Status(False, False))
+    monkeypatch.setattr(service, "recent_log", lambda state: [])
+    assert cli.main(["-c", str(tmp_path / "none.toml"), "status"]) == 0
+    assert "no config yet" in capsys.readouterr().out
+    assert cli.main(["-c", str(tmp_path / "none.toml"), "status", "--json"]) == 0
+    assert json.loads(capsys.readouterr().out)["config"] == {"path": None, "problems": []}

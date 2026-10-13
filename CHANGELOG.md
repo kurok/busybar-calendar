@@ -6,6 +6,14 @@ All notable changes to busybar-calendar. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- `status`, and `busybar-calendar` on its own, report a config that does
+  not load - with its problems and the fact that a running service keeps
+  the config it last loaded - instead of stopping at the first error and
+  showing nothing about the service. `status` exits 1 then, and its
+  `--json` has a `config` block with the path and the problems.
+
 ## [0.5.0] - 2026-10-13
 
 ### Added

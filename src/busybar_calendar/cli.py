@@ -106,10 +106,6 @@ async def cmd_check(config: Config, args: argparse.Namespace) -> int:
     return await diagnose.check(config, as_json=args.json)
 
 
-async def cmd_status(config: Config | None, args: argparse.Namespace) -> int:
-    return await diagnose.status(config, as_json=args.json)
-
-
 async def cmd_replay(config: Config, args: argparse.Namespace) -> int:
     return await playback.replay(config, args.day, args.seconds, args.quiet)
 
@@ -246,14 +242,33 @@ No config yet. To set it up:
 busybar-calendar --help lists every command."""
 
 
+def _status(args: argparse.Namespace, as_json: bool = False) -> int | None:
+    """
+    `status`, which needs no config for its service part, and takes a broken
+    one in its stride: a running service keeps the last config that loaded,
+    so it is reported beside the problems. None when there is no config yet.
+    """
+    try:
+        path = config_module.find(args.config)
+    except ConfigError:
+        path = None
+    if path is None or not path.is_file():
+        if as_json:
+            return asyncio.run(diagnose.status(None, as_json=True))
+        return None
+    try:
+        config, problems = config_module.load(path), []
+    except EXPECTED as error:
+        config, problems = None, describe(error)
+    return asyncio.run(diagnose.status(config, as_json, path=path, problems=problems))
+
+
 def _where_you_stand(args: argparse.Namespace) -> int:
     """`busybar-calendar` alone: first steps before a config exists, the status after."""
-    try:
-        config = config_module.load(config_module.find(args.config))
-    except ConfigError:
+    code = _status(args)
+    if code is None:
         print(FIRST_STEPS)
         return 0
-    code = asyncio.run(diagnose.status(config))
     print("\nbusybar-calendar --help lists every command.")
     return code
 
@@ -360,12 +375,9 @@ def main(argv: list[str] | None = None) -> int:
             return cmd_restart(args)
         if args.command is None:
             return _where_you_stand(args)
-        if args.command == "status":  # the service part needs no config
-            try:
-                config = config_module.load(config_module.find(args.config))
-            except ConfigError:
-                config = None
-            return asyncio.run(cmd_status(config, args))
+        if args.command == "status":
+            code = _status(args, args.json)
+            return asyncio.run(diagnose.status(None)) if code is None else code
         if args.command == "init":  # writes the config
             path = Path(
                 args.config

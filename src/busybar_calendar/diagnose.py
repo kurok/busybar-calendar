@@ -8,7 +8,7 @@ import json
 import logging
 import sys
 import tomllib
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterator, Sequence
 from datetime import UTC, datetime, timedelta, tzinfo
 from pathlib import Path
 
@@ -228,8 +228,13 @@ async def bar_health(config: Config, timeout: float = BAR_TIMEOUT) -> dict:
             await bar.aclose()
 
 
-async def status_data(config: Config | None) -> dict:
-    """What `status` reports, as data: the service, and the calendar's screen now and next."""
+async def status_data(
+    config: Config | None, path: Path | None = None, problems: Sequence[str] = ()
+) -> dict:
+    """
+    What `status` reports, as data: the service, the config's problems if it
+    does not load, and the calendar's screen now and next.
+    """
     state = service.status()
     data: dict = {
         "version": __version__,
@@ -243,6 +248,7 @@ async def status_data(config: Config | None) -> dict:
             "version": service.running_version(state) if state.running else None,
             "python": service.installed_python() if state.installed else None,
         },
+        "config": {"path": str(path) if path else None, "problems": list(problems)},
         "bar": None,
         "calendar": None,
     }
@@ -325,9 +331,17 @@ def print_status(data: dict) -> None:
                 f"Bar       {bar['where']}: NOT answering ({bar['detail']}). Is it on and "
                 "online? If it stays stuck, unplug it and plug it back in."
             )
+    problems = data["config"]["problems"]
+    if problems:
+        print(f"Config    does not load: {data['config']['path']}")
+        if svc["running"]:
+            print("          the running service keeps the config it last loaded")
+        for line in problems:
+            print(f"            {line}")
     calendar = data["calendar"]
     if calendar is None:
-        print("Calendar  no config yet: `busybar-calendar init` writes one")
+        if not problems:
+            print("Calendar  no config yet: `busybar-calendar init` writes one")
         return
     now = datetime.now(UTC)
     if calendar["now"] is None:
@@ -347,11 +361,20 @@ def print_status(data: dict) -> None:
         print(f"          next {nxt['kind']}: {nxt['title']}, at {_when(at, now, at.tzinfo)}")
 
 
-async def status(config: Config | None, as_json: bool = False) -> int:
-    """Is it running, what did it last do, and what is on the bar now and next."""
-    data = await status_data(config)
+async def status(
+    config: Config | None,
+    as_json: bool = False,
+    *,
+    path: Path | None = None,
+    problems: Sequence[str] = (),
+) -> int:
+    """Is it running, what did it last do, and what is on the bar now and next.
+
+    1 when the config does not load (`problems`), so a script notices.
+    """
+    data = await status_data(config, path, problems)
     if as_json:
         print(json.dumps(data, indent=2, ensure_ascii=False))
     else:
         print_status(data)
-    return 0
+    return 1 if problems else 0

@@ -104,6 +104,20 @@ An `include` or `exclude` entry names no calendar. Names are exact and
 case-sensitive; `busybar-calendar calendars` lists them with their ids, and
 an id keeps working when a calendar is renamed.
 
+## `Config does not load`
+
+```
+Config    does not load: /Users/me/.config/busybar-calendar/config.toml
+          the running service keeps the config it last loaded
+            titles.0.status: show: show must be 'name' or one of back_soon, booked, ...
+```
+
+An edit broke the config. The service picks up edits by itself within a
+minute, but not this one: it carries on with the config it last loaded,
+and its log has the same lines. Each says where the problem is -
+`titles.0` is the first `[[titles]]` rule, `sources.1` the second source -
+and once the file is fixed, the service takes it at its next wake.
+
 ## Nothing on the bar during a meeting
 
 `busybar-calendar status` says what the service thinks is on the bar:
