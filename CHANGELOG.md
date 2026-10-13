@@ -6,6 +6,8 @@ All notable changes to busybar-calendar. The format follows
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-10-13
+
 ### Added
 
 - `busybar-calendar install --auto-update`: the background service updates
@@ -219,7 +221,8 @@ Found on a bar running firmware 1.2.4, and recorded in
 - A refused draw (409) stopped the demo and replay.
 - A Ctrl-C during the slow first start printed a traceback.
 
-[Unreleased]: https://github.com/kurok/busybar-calendar/compare/v0.6.1...HEAD
+[Unreleased]: https://github.com/kurok/busybar-calendar/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/kurok/busybar-calendar/compare/v0.6.1...v0.7.0
 [0.6.1]: https://github.com/kurok/busybar-calendar/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/kurok/busybar-calendar/compare/v0.5.1...v0.6.0
 [0.5.1]: https://github.com/kurok/busybar-calendar/compare/v0.5.0...v0.5.1
