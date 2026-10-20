@@ -28,6 +28,7 @@ from pydantic import BaseModel, Field
 from . import icons
 from .config import DisplayConfig
 from .events import UNTITLED
+from .fontmetrics import text_width
 from .schedule import Screen
 
 WIDTH = 72
@@ -36,8 +37,11 @@ TEXT_X = ICON + 2
 REMINDER_ANIMATION = "shared/animations/calendar_reminder_16x16.anim"
 EVENT_ANIMATION = "shared/animations/calendar_event_16x16.anim"
 HIDDEN_TITLE = "Next event"
+MAYBE_LABEL = "MAYBE"
 # What an event you marked tentative is drawn in; see `[display] tentative_yellow`.
 TENTATIVE_COLOR = "#FFC800FF"
+WHITE = "#FFFFFFFF"
+BLACK = "#000000FF"
 # How long a drawing outlives its screen if nothing replaces it; see above.
 EXPIRY_GRACE = 60
 DRAW_PATH = "/api/display/draw"
@@ -62,6 +66,15 @@ SCROLL_RATE = 1200
 SCROLL_START_DELAY = 1500
 SCROLL_REPEAT_DELAY = 2500
 
+# The banner and bold-title designs: the title takes the top eleven rows in the 7px
+# font, the countdown and the label the last five. y=-1 puts the font's glyphs on
+# rows 1-9 (0-9 in the global font), which leaves a row between them and the digits.
+BAND_HEIGHT = 11
+BIG_TITLE_Y = -1
+LOW_COUNTDOWN_Y = 20  # bottom_left: the superscript digits land on rows 11-15
+LOW_LABEL_Y = 9  # small font, top_right: rows 11-15
+BAND_TITLE_X = 2
+
 
 class XpmBitmapElement(types.DisplayElementBase):
     """An inline XPM2 image: in the bar's API, but not yet among busylib's models."""
@@ -72,7 +85,11 @@ class XpmBitmapElement(types.DisplayElementBase):
 
 
 Element = Annotated[
-    types.TextElement | types.AnimationElement | types.CountdownElement | XpmBitmapElement,
+    types.TextElement
+    | types.AnimationElement
+    | types.CountdownElement
+    | types.RectangleElement
+    | XpmBitmapElement,
     Field(discriminator="type"),
 ]
 
@@ -172,9 +189,19 @@ def _icon(choice: str, animation: str, until: str, tentative: bool) -> Element:
 
 
 def _titled(
-    screen: Screen, icon: Element, title: str, display: DisplayConfig, until: str
+    screen: Screen,
+    icon: Element,
+    title: str,
+    display: DisplayConfig,
+    until: str,
+    words: bool = False,
 ) -> list[Element]:
-    """A calendar icon, a title, a countdown to `screen.until` and, during an event, BUSY."""
+    """
+    A calendar icon, a title, a countdown to `screen.until` and, during an event, BUSY.
+
+    With `words`, an event you marked tentative says MAYBE in that place - also in its
+    reminder - so the response shows in a word as well as in the colour.
+    """
     font = display.title_font
     if font == "global":
         # 11px leaves no second line: title and countdown share one.
@@ -199,14 +226,18 @@ def _titled(
             display_until=until,
         ),
     ]
+    tentative = _tentative(screen, display)
+    label = display.busy_label if screen.kind == "status" else ""
+    if words and tentative:
+        label = MAYBE_LABEL
     # Beside a global-font title there is no room left for the label.
-    if screen.kind == "status" and display.busy_label and font != "global":
+    if label and font != "global":
         elements.append(
             types.TextElement(
-                id="cal_busy",
-                text=display.busy_label,
+                id="cal_busy_m" if words and tentative else "cal_busy",
+                text=label,
                 font="small",
-                color=TENTATIVE_COLOR if _tentative(screen, display) else display.busy_color,
+                color=TENTATIVE_COLOR if tentative else display.busy_color,
                 x=WIDTH,
                 y=LABEL_TOP_Y,
                 align="top_right",
@@ -216,29 +247,168 @@ def _titled(
     return elements
 
 
+def _wide_title(
+    element_id: str, text: str, font: str, x: int, available: int, color: str, until: str
+) -> types.TextElement:
+    """The title in the 7px (or global) font, scrolling when its true width does not fit."""
+    scroll = text_width(text, font) > available
+    return types.TextElement(
+        id=element_id,
+        text=text,
+        font=font,
+        color=color,
+        x=x,
+        y=BIG_TITLE_Y,
+        align="top_left",
+        display_until=until,
+        width=available if scroll else None,
+        scroll_rate=SCROLL_RATE if scroll else None,
+        scroll_start_delay=SCROLL_START_DELAY if scroll else None,
+        scroll_repeat_delay=SCROLL_REPEAT_DELAY if scroll else None,
+    )
+
+
+def _low_countdown(
+    element_id: str, screen: Screen, color: str, until: str
+) -> types.CountdownElement:
+    return types.CountdownElement(
+        id=element_id,
+        timestamp=str(int(screen.until.timestamp())),
+        direction="time_left",
+        show_hours="when_non_zero",
+        color=color,
+        x=1,
+        y=LOW_COUNTDOWN_Y,
+        align="bottom_left",
+        display_until=until,
+    )
+
+
+def _low_label(element_id: str, text: str, color: str, until: str) -> types.TextElement:
+    return types.TextElement(
+        id=element_id,
+        text=text,
+        font="small",
+        color=color,
+        x=WIDTH,
+        y=LOW_LABEL_Y,
+        align="top_right",
+        display_until=until,
+    )
+
+
+def _large_font(display: DisplayConfig) -> str:
+    return "global" if display.title_font == "global" else "normal"
+
+
+def _banner(screen: Screen, display: DisplayConfig, title: str, until: str) -> list[Element]:
+    """
+    The title on a band: red (the BUSY colour) during an event you accepted, white before
+    it starts, and for a tentative one a yellow outline with a yellow title. The
+    countdown and BUSY sit below. The ids differ with the band's look, so a change of
+    look clears the screen first rather than recolouring a rectangle in place.
+    """
+    status = screen.kind == "status"
+    font = _large_font(display)
+    if _tentative(screen, display):
+        band = types.RectangleElement(
+            id="cal_band_m",
+            x=0,
+            y=0,
+            width=WIDTH,
+            height=BAND_HEIGHT,
+            fill="none",
+            fill_colors=[TENTATIVE_COLOR],
+            border_width=1,
+            border_color=TENTATIVE_COLOR,
+            display_until=until,
+        )
+        title_color, label_color, suffix = TENTATIVE_COLOR, TENTATIVE_COLOR, "_m"
+    else:
+        fill = display.busy_color if status else WHITE
+        band = types.RectangleElement(
+            id="cal_band" if status else "cal_band_r",
+            x=0,
+            y=0,
+            width=WIDTH,
+            height=BAND_HEIGHT,
+            fill="solid",
+            fill_colors=[fill],
+            border_width=0,
+            display_until=until,
+        )
+        title_color, label_color, suffix = BLACK, display.busy_color, ""
+    elements: list[Element] = [
+        band,
+        _wide_title(
+            "cal_title" + suffix,
+            title,
+            font,
+            BAND_TITLE_X,
+            WIDTH - 2 * BAND_TITLE_X,
+            title_color,
+            until,
+        ),
+        _low_countdown("cal_time", screen, WHITE, until),
+    ]
+    if status and display.busy_label:
+        elements.append(_low_label("cal_busy" + suffix, display.busy_label, label_color, until))
+    return elements
+
+
+def _bold_title(screen: Screen, display: DisplayConfig, title: str, until: str) -> list[Element]:
+    """
+    The title in the larger font across the top, the countdown and the label in the state
+    colour below it: red when accepted, yellow when tentative - which says MAYBE - and
+    white in a reminder. The ids differ with the look, so a change of look clears first.
+    """
+    status = screen.kind == "status"
+    tentative = _tentative(screen, display)
+    if not status:
+        color, time_id = WHITE, "cal_time_r"
+    elif tentative:
+        color, time_id = TENTATIVE_COLOR, "cal_time_m"
+    else:
+        color, time_id = display.busy_color, "cal_time_a"
+    elements: list[Element] = [
+        _wide_title("cal_title", title, _large_font(display), 1, WIDTH - 2, WHITE, until),
+        _low_countdown(time_id, screen, color, until),
+    ]
+    label = MAYBE_LABEL if tentative else display.busy_label
+    if status and label:
+        elements.append(_low_label("cal_busy_m" if tentative else "cal_busy", label, color, until))
+    return elements
+
+
 def elements(screen: Screen, display: DisplayConfig) -> list[Element]:
     until = str(int(screen.until.timestamp()) + EXPIRY_GRACE)
+    if screen.kind == "status" and screen.status.show != "name":
+        # One of the bar's own statuses, whatever the layout.
+        return [
+            types.AnimationElement(
+                id="cal_status",
+                stock_path=f"shared/animations/{screen.status.show}_72x16.anim",
+                loop=True,
+                x=0,
+                y=0,
+                align="top_left",
+                display_until=until,
+            )
+        ]
     if screen.kind == "reminder":
         title = (
             title_text(screen.event.title, display) if screen.reminder.show_name else HIDDEN_TITLE
         )
-        icon = _icon(display.reminder_icon, REMINDER_ANIMATION, until, _tentative(screen, display))
-        return _titled(screen, icon, title, display, until)
-
-    if screen.status.show == "name":
-        icon = _icon(display.event_icon, EVENT_ANIMATION, until, _tentative(screen, display))
-        return _titled(screen, icon, title_text(screen.event.title, display), display, until)
-    return [
-        types.AnimationElement(
-            id="cal_status",
-            stock_path=f"shared/animations/{screen.status.show}_72x16.anim",
-            loop=True,
-            x=0,
-            y=0,
-            align="top_left",
-            display_until=until,
-        )
-    ]
+        choice, animation = display.reminder_icon, REMINDER_ANIMATION
+    else:
+        title = title_text(screen.event.title, display)
+        choice, animation = display.event_icon, EVENT_ANIMATION
+    if display.layout == "banner":
+        return _banner(screen, display, title, until)
+    if display.layout == "bold_title":
+        return _bold_title(screen, display, title, until)
+    icon = _icon(choice, animation, until, _tentative(screen, display))
+    return _titled(screen, icon, title, display, until, words=display.layout == "words")
 
 
 def drawing(

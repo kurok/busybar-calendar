@@ -42,6 +42,7 @@ reminder on top of a BUSY session or the clock the way the integration does.
 | `render.py` | The display elements for a screen, and its sound. |
 | `runner.py` | The loop: refresh, decide, draw or clear, sleep until the next change. |
 | `icons.py` | The red and yellow calendars, as XPM2 images drawn inline. |
+| `fontmetrics.py` | How wide the 7px and 11px fonts draw text, so a title scrolls only when it has to. |
 | `config.py` | The TOML config, its models and where it is found; each option's description lives here. |
 | `connect.py` | What every command shares: the bar client, the sources, stopping on a signal. |
 | `diagnose.py` | `check` and `status`, as text or JSON. |
@@ -114,6 +115,31 @@ that element, so drawings are posted with `api_request` rather than
 `icons.py` for the pixels and their licence. The yellow one has an element id of its own
 (`cal_xpm_maybe`), so a switch between the colours clears and redraws the
 icon instead of depending on the bar swapping an existing bitmap's pixels.
+
+### Screen designs
+
+`[display] layout` picks one of four; the table above is the `default`. The others
+draw these elements (a status that is one of the bar's own animations is the same
+in every design):
+
+| Design | Elements, in drawing order |
+| --- | --- |
+| `banner` | `cal_band` (filled `rectangle`, 72x11, in `busy_color`; `cal_band_r`, white, in a reminder; `cal_band_m`, a yellow outline, for a tentative event), `cal_title` (7px font, black on the band; `cal_title_m`, yellow, when tentative), `cal_time` (countdown, bottom row), `cal_busy` (`cal_busy_m` when tentative) |
+| `bold_title` | `cal_title` (7px font, white), `cal_time_r` (white, reminder), `cal_time_a` (`busy_color`) or `cal_time_m` (yellow, tentative), `cal_busy` (`BUSY`) or `cal_busy_m` (`MAYBE`, tentative) |
+| `words` | as the default, and a tentative event shows `cal_busy_m` (`MAYBE`) in its reminder as well as during the event |
+
+Where a change of look would recolour an element in place (a white band turning red,
+a countdown changing colour), the new look has an id of its own, so the runner clears
+the screen and draws it afresh rather than relying on the bar to update an existing
+rectangle or countdown. A reminder turning into its event keeps the ids, and adds
+only what is new, in the default, `words` and a tentative `banner`.
+
+The title is scrolled only when it does not fit, decided from the real width of each
+character in the font (`fontmetrics.py`): "Design review" is 65 px in the 7px font,
+58 px in the 11px `global` font. The countdown label sits on the last five rows
+(y=20 for the countdown, y=9 for the label), the title on the first eleven (y=-1).
+With `title_font = "global"` the label still fits in `banner` and `bold_title`, but not
+in `words`, which keeps the default layout's one line.
 
 Sounds: `shared/sounds/calendar_reminder_ends.snd` when a reminder opens and
 `shared/sounds/calendar_event_starts.snd` when an event starts. Both can be

@@ -6,6 +6,25 @@ All notable changes to busybar-calendar. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- Three more screen designs besides the default, chosen with `[display] layout` and
+  offered by `busybar-calendar init` (the default is number 1):
+  - `banner`: the title on a band of the state colour - red when accepted, white
+    before the start, a yellow outline for a Maybe - with the countdown and BUSY
+    below.
+  - `bold_title`: the title in the larger 7px font, the countdown and the label in
+    the state colour, no icon; a Maybe says MAYBE.
+  - `words`: the default look with the response in words, MAYBE where BUSY would be,
+    in the reminder as well as during the event.
+  They were picked from ten whole-screen concepts; those scoring over 70 of 100 were
+  kept. All three were drawn on a real bar and match the expected pixels exactly.
+- `init` asks which design to draw. The default is not written to the config, so it
+  stays the default if a later release changes it.
+- A title in the new designs scrolls only when it really does not fit, from the real
+  width of each character in the 7px and 11px fonts (`fontmetrics.py`).
+- `scripts/capture_screens.py` draws the new designs, for the README.
+
 ## [0.8.0] - 2026-10-20
 
 ### Added

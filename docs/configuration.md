@@ -47,6 +47,7 @@ What the bar shows.
 
 | Key | Default | |
 | --- | --- | --- |
+| `layout` | `"default"` | The screen design; `init` asks. `default`: calendar icon, title, ticking countdown and BUSY. `banner`: the title on a band of the state colour, countdown and BUSY below. `bold_title`: the title in a larger font, countdown and label in the state colour, no icon. `words`: the default look with the response in words: MAYBE where BUSY would be. `banner` and `bold_title` draw the title in the 7px font (`global` with `title_font = "global"`), have no icon, and ignore `reminder_icon` and `event_icon`. |
 | `title_font` | `"small"` | `small` fits the title and countdown on two lines; `global` draws Cyrillic, CJK and accents, on one line beside the countdown. |
 | `transliterate` | `true` | Fold titles to ASCII for the bitmap fonts (`Планування` -> `Planuvannya`). Not used with `global`. |
 | `reminder_sound` | `"shared/sounds/calendar_reminder_ends.snd"` | The stock sound a reminder plays. |

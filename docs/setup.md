@@ -4,7 +4,7 @@ The quick way:
 
 ```sh
 uv tool install git+https://github.com/kurok/busybar-calendar
-busybar-calendar init      # answers in, config out: the bar, the calendar, the passwords
+busybar-calendar init      # answers in, config out: the bar, the calendar, the passwords, the screen design
 busybar-calendar check     # proves it works, or says what to fix
 busybar-calendar install   # runs it in the background from now on
 busybar-calendar status    # and later: is it running, and what is on the bar next

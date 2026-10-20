@@ -2,7 +2,7 @@
 `busybar-calendar init`: a few questions instead of editing a TOML file.
 
 It asks how to reach the bar and which calendar to read, signs in to list
-the calendars, and writes the config. Passwords never pass through this
+the calendars, which screen design to draw, and writes the config. Passwords never pass through this
 program: on macOS the Keychain's own prompt (`security ... -w`) reads them,
 on Linux libsecret's (`secret-tool store`), and the config only names the
 command that reads them back. Without either, the config names an
@@ -24,7 +24,7 @@ from zoneinfo import ZoneInfo
 
 from . import sources
 from .caldav import CalDAVError, RemoteCalendar
-from .config import Config, ConfigError, SourceConfig, load
+from .config import LAYOUTS, Config, ConfigError, SourceConfig, load
 
 Ask = Callable[[str], str]
 USB_HOST = "10.0.4.20"
@@ -149,8 +149,10 @@ def _text(ask: Ask, question: str, default: str = "") -> str:
 class Answers:
     bar_lines: list[str] = field(default_factory=list)
     source_lines: list[str] = field(default_factory=list)
+    display_lines: list[str] = field(default_factory=list)
 
     def toml(self) -> str:
+        display = ["[display]", *self.display_lines, ""] if self.display_lines else []
         return "\n".join(
             [
                 "# Written by `busybar-calendar init`. Every setting: config.example.toml.",
@@ -158,6 +160,7 @@ class Answers:
                 "[bar]",
                 *self.bar_lines,
                 "",
+                *display,
                 "[[sources]]",
                 *self.source_lines,
                 "",
@@ -187,6 +190,19 @@ def ask_bar(ask: Ask, store: SecretStore, answers: Answers) -> None:
         print("The BUSY Cloud token:")
     secret = store.save("busybar-calendar-bar", "busybar-calendar", "BUSYBAR_TOKEN")
     answers.bar_lines.append(secret.toml("token"))
+
+
+def ask_design(ask: Ask, answers: Answers) -> None:
+    """Which screen design; the default is not written, so a later default stays the default."""
+    keys = list(LAYOUTS)
+    number = _choose(
+        ask,
+        "Which screen design?",
+        [f"{label}: {text}" for label, text in LAYOUTS.values()],
+    )
+    if keys[number - 1] != keys[0]:
+        answers.display_lines.append(f"layout = {json.dumps(keys[number - 1])}")
+    print("Change it later with `layout` under [display] in the config.")
 
 
 def _unique(name: str, taken: frozenset[str]) -> str:
@@ -306,6 +322,8 @@ def run(
     ask_bar(ask, store, answers)
     print()
     ask_calendar(ask, store, answers, discover)
+    print()
+    ask_design(ask, answers)
     text = answers.toml()
     Config.model_validate(tomllib.loads(text))  # what load() will read, checked before saving
     path.parent.mkdir(parents=True, exist_ok=True)

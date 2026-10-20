@@ -219,3 +219,186 @@ def test_titles_are_capped():
         text = title_text(long, DisplayConfig(title_font=font))
         assert len(text) <= MAX_TITLE and text.endswith("...")
     assert title_text("Standup", DisplayConfig()) == "Standup"  # short ones untouched
+
+
+# ---- the screen designs -------------------------------------------------------------------------
+LAYOUTS = ["banner", "bold_title", "words"]
+BUSY_RED, YELLOW, WHITE, BLACK = "#FF0000FF", "#FFC800FF", "#FFFFFFFF", "#000000FF"
+
+
+def design(layout, kind="status", response="accepted", **display):
+    config = DisplayConfig(layout=layout, **display)
+    return by_id(drawing(screen(kind, response=response), config, "a", 91))
+
+
+def test_the_default_layout_is_unchanged():
+    assert DisplayConfig().layout == "default"
+    explicit = by_id(drawing(screen("status"), DisplayConfig(layout="default"), "a", 91))
+    implicit = by_id(drawing(screen("status"), DisplayConfig(), "a", 91))
+    assert explicit == implicit
+    assert list(explicit) == ["cal_xpm", "cal_title", "cal_time", "cal_busy"]
+
+
+def test_banner_accepted_is_a_red_band_with_a_cut_out_title():
+    e = design("banner")
+    assert list(e) == ["cal_band", "cal_title", "cal_time", "cal_busy"]
+    band = e["cal_band"]
+    assert (band.type, band.x, band.y, band.width, band.height) == ("rectangle", 0, 0, 72, 11)
+    assert (band.fill, band.fill_colors, band.border_width) == ("solid", [BUSY_RED], 0)
+    title = e["cal_title"]
+    assert (title.font, title.color, title.x, title.y, title.align) == (
+        "normal",
+        BLACK,
+        2,
+        -1,
+        "top_left",
+    )
+    time = e["cal_time"]
+    assert (time.x, time.y, time.align, time.color) == (1, 20, "bottom_left", WHITE)
+    busy = e["cal_busy"]
+    assert (busy.text, busy.font, busy.color) == ("BUSY", "small", BUSY_RED)
+    assert (busy.x, busy.y, busy.align) == (72, 9, "top_right")
+
+
+def test_banner_reminder_is_a_white_band_without_busy():
+    e = design("banner", "reminder")
+    assert list(e) == ["cal_band_r", "cal_title", "cal_time"]
+    assert (e["cal_band_r"].fill, e["cal_band_r"].fill_colors) == ("solid", [WHITE])
+    assert e["cal_title"].color == BLACK
+
+
+def test_banner_tentative_is_a_yellow_outline_with_a_yellow_title():
+    for kind, ids in (
+        ("reminder", ["cal_band_m", "cal_title_m", "cal_time"]),
+        ("status", ["cal_band_m", "cal_title_m", "cal_time", "cal_busy_m"]),
+    ):
+        e = design("banner", kind, "tentative")
+        assert list(e) == ids
+        band = e["cal_band_m"]
+        assert (band.fill, band.border_width, band.border_color) == ("none", 1, YELLOW)
+        assert e["cal_title_m"].color == YELLOW
+    assert design("banner", "status", "tentative")["cal_busy_m"].color == YELLOW
+
+
+def test_bold_title_colours_follow_the_state():
+    reminder = design("bold_title", "reminder")
+    assert list(reminder) == ["cal_title", "cal_time_r"]
+    assert reminder["cal_time_r"].color == WHITE
+    accepted = design("bold_title")
+    assert list(accepted) == ["cal_title", "cal_time_a", "cal_busy"]
+    assert accepted["cal_time_a"].color == BUSY_RED
+    assert (accepted["cal_busy"].text, accepted["cal_busy"].color) == ("BUSY", BUSY_RED)
+    maybe = design("bold_title", "status", "tentative")
+    assert list(maybe) == ["cal_title", "cal_time_m", "cal_busy_m"]
+    assert maybe["cal_time_m"].color == YELLOW
+    assert (maybe["cal_busy_m"].text, maybe["cal_busy_m"].color) == ("MAYBE", YELLOW)
+    title = accepted["cal_title"]
+    assert (title.font, title.color, title.x, title.y) == ("normal", WHITE, 1, -1)
+
+
+def test_words_says_maybe_in_the_reminder_and_the_event():
+    for kind in ("reminder", "status"):
+        e = design("words", kind, "tentative")
+        assert e["cal_xpm_maybe"].data == icons.YELLOW_CALENDAR
+        assert (e["cal_busy_m"].text, e["cal_busy_m"].color) == ("MAYBE", YELLOW)
+    assert "cal_busy" not in design("words", "reminder")  # an accepted reminder has no label
+    assert design("words")["cal_busy"].text == "BUSY"
+    # The word does not depend on the BUSY label being on.
+    assert design("words", "status", "tentative", busy_label="")["cal_busy_m"].text == "MAYBE"
+
+
+def test_words_with_the_global_font_has_no_label_as_the_default_has_none():
+    e = design("words", "status", "tentative", title_font="global")
+    assert not any(key.startswith("cal_busy") for key in e)
+
+
+@pytest.mark.parametrize("layout", LAYOUTS)
+def test_tentative_yellow_off_draws_a_maybe_like_an_accepted_event(layout):
+    plain = design(layout, "status", "accepted")
+    maybe = design(layout, "status", "tentative", tentative_yellow=False)
+    assert maybe == plain
+    assert list(maybe) == list(design(layout, "status", "accepted", tentative_yellow=False))
+
+
+@pytest.mark.parametrize("layout", LAYOUTS)
+def test_a_stock_status_is_drawn_the_same_in_every_layout(layout):
+    status = StatusSettings(show="meeting")
+    config = DisplayConfig(layout=layout)
+    [element] = drawing(screen("status", status=status), config, "a", 91).elements
+    assert element.stock_path == "shared/animations/meeting_72x16.anim"
+
+
+@pytest.mark.parametrize("layout", ["banner", "bold_title"])
+def test_the_large_layouts_use_the_global_font_when_asked(layout):
+    e = design(layout, "reminder", title_font="global")
+    assert e["cal_title"].font == "global"
+    assert design(layout, "reminder", title_font="small")["cal_title"].font == "normal"
+    # Cyrillic is drawn as it is in the global font and transliterated in the others.
+    global_title = design(layout, "reminder", title_font="global")["cal_title"]
+    assert global_title.text == "Планування спринту"
+    assert design(layout, "reminder")["cal_title"].text == "Planuvannya sprintu"
+
+
+def title_event(title):
+    event = dataclasses.replace(EVENT, title=title)
+    return Screen("reminder", event, ReminderSettings(), StatusSettings())
+
+
+def test_a_title_scrolls_only_when_its_true_width_does_not_fit():
+    from busybar_calendar.fontmetrics import text_width
+
+    def width(text):
+        return text_width(text, "normal")
+
+    for layout, available in (("banner", 68), ("bold_title", 70)):
+        config = DisplayConfig(layout=layout)
+
+        def title_of(text, config=config):
+            return by_id(drawing(title_event(text), config, "a", 91))["cal_title"]
+
+        # "Design review" is 65 px in the 7px font: it fits both, and does not scroll.
+        assert title_of("Design review").scroll_rate is None
+
+        # Narrow letters: many characters, few pixels. A flat 5 px a character would scroll it.
+        narrow = "i" * (available // width("i"))
+        assert width(narrow) <= available < len(narrow) * 5
+        assert title_of(narrow).scroll_rate is None
+
+        # Wide letters: few characters, many pixels. A flat 5 px a character would not scroll it.
+        wide = "W" * (available // width("W") + 1)
+        assert len(wide) * 5 <= available < width(wide)
+        scrolling = title_of(wide)
+        assert (scrolling.width, scrolling.scroll_rate) == (available, 1200)
+
+        # The exact edge: filled to the pixel does not scroll, one more letter does.
+        text = "Design review"
+        while width(text + "i") <= available:
+            text += "i"
+        assert title_of(text).scroll_rate is None
+        assert width(text + "i") > available
+        assert title_of(text + "i").scroll_rate is not None
+
+
+def test_a_long_title_scrolls_inside_its_box():
+    long = "Quarterly planning with the design team"
+    e = by_id(drawing(title_event(long), DisplayConfig(layout="banner"), "a", 91))
+    title = e["cal_title"]
+    assert (title.x, title.width) == (2, 68)  # inside the band, two pixels from each end
+    assert title.scroll_start_delay == 1500 and title.scroll_repeat_delay == 2500
+
+
+@pytest.mark.parametrize("layout", LAYOUTS)
+@pytest.mark.parametrize("kind", ["reminder", "status"])
+@pytest.mark.parametrize("response", ["accepted", "tentative"])
+def test_every_design_serialises_for_the_wire(layout, kind, response):
+    payload = drawing(
+        screen(kind, response=response), DisplayConfig(layout=layout), "a", 91
+    ).payload()
+    assert payload["priority"] == 91
+    ids = [e["id"] for e in payload["elements"]]
+    assert len(ids) == len(set(ids))
+    for element in payload["elements"]:
+        assert "timeout" not in element
+        assert element["display_until"].isdigit()
+        if element["type"] == "rectangle":
+            assert element["fill_colors"] and element["width"] == 72 and element["height"] == 11
