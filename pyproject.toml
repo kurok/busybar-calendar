@@ -1,6 +1,6 @@
 [project]
 name = "busybar-calendar"
-version = "0.7.2"
+version = "0.8.0"
 description = "CalDAV and ICS calendar reminders for the BUSY Bar, drawn the way its Google Calendar integration draws them"
 readme = "README.md"
 license = "MIT AND OFL-1.1"
