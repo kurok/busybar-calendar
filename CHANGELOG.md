@@ -6,6 +6,8 @@ All notable changes to busybar-calendar. The format follows
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-10-20
+
 ### Added
 
 - Events you marked tentative ("Maybe") are drawn in yellow: a yellow calendar
@@ -23,6 +25,9 @@ All notable changes to busybar-calendar. The format follows
 - The screen is redrawn when you change your answer to an event that is
   already up - marked "maybe" from your phone, say - at the next refresh,
   not only when the screen changes.
+- CI tests Python 3.12, 3.14 and 3.15 (it was 3.11, 3.12 and 3.13), and its
+  actions run on Node 24. `requires-python` stays `>=3.11`, which is no
+  longer tested.
 
 ## [0.7.2] - 2026-10-13
 
@@ -258,7 +263,8 @@ Found on a bar running firmware 1.2.4, and recorded in
 - A refused draw (409) stopped the demo and replay.
 - A Ctrl-C during the slow first start printed a traceback.
 
-[Unreleased]: https://github.com/kurok/busybar-calendar/compare/v0.7.2...HEAD
+[Unreleased]: https://github.com/kurok/busybar-calendar/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/kurok/busybar-calendar/compare/v0.7.2...v0.8.0
 [0.7.2]: https://github.com/kurok/busybar-calendar/compare/v0.7.1...v0.7.2
 [0.7.1]: https://github.com/kurok/busybar-calendar/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/kurok/busybar-calendar/compare/v0.6.1...v0.7.0
