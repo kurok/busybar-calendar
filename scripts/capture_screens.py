@@ -74,6 +74,12 @@ def scenarios(now: datetime):
         accepted = Screen("status", event("Design review", -2, 45), reminder, status)
         yield f"design-{label}", accepted, design, 1
         yield f"design-{label}-maybe", Screen("status", maybe, reminder, status), design, 1
+        yield (
+            f"design-{label}-reminder",
+            Screen("reminder", event("Design review", 5), reminder, status),
+            design,
+            1,
+        )
     in_progress = event("Design review", -2, 45)
     yield "status-meeting", Screen("status", in_progress, reminder, meeting), small, 18
     long_title = event("Quarterly planning with the design team", 10)
