@@ -118,6 +118,16 @@ def test_tentative_status_can_be_turned_off():
     assert status.tentative is False
 
 
+def test_yellow_for_tentative_events_is_on_unless_turned_off(tmp_path):
+    path = tmp_path / "c.toml"
+    path.write_text(
+        '[[sources]]\nname = "Work"\ntype = "ics"\nurl = "https://x"\n'
+        "[display]\ntentative_yellow = false\n"
+    )
+    assert load(path).display.tentative_yellow is False
+    assert Config.model_validate(base()).display.tentative_yellow is True
+
+
 def test_a_config_file_needs_a_source(tmp_path):
     path = tmp_path / "c.toml"
     path.write_text('[bar]\naddress = "10.0.4.20"\n')

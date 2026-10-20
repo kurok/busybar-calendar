@@ -6,6 +6,21 @@ All notable changes to busybar-calendar. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- Events you marked tentative ("Maybe") are drawn in yellow: a yellow calendar
+  and a yellow `BUSY`, in the reminder and during the event, so they read
+  differently from the events you accepted. `[display] tentative_yellow = false`
+  draws them in red like the rest. With `reminder_icon` / `event_icon` set to
+  `animation` only the label turns yellow, as the bar's own animation has no
+  yellow version.
+
+### Changed
+
+- The screen is redrawn when you change your answer to an event that is
+  already up - marked "maybe" from your phone, say - at the next refresh,
+  not only when the screen changes.
+
 ## [0.7.2] - 2026-10-13
 
 ### Fixed

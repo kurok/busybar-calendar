@@ -55,6 +55,7 @@ What the bar shows.
 | `event_icon` | `"red_calendar"` | The icon during an event: the red calendar, or the bar's own animation. |
 | `busy_label` | `"BUSY"` | The word beside the countdown during an event; `""` for none. Not drawn with the `global` font. |
 | `busy_color` | `"#FF0000FF"` | Its colour, `#RRGGBB` or `#RRGGBBAA`. |
+| `tentative_yellow` | `true` | Draw events you marked tentative in yellow - the calendar icon and the label - so they differ from accepted ones. Off, they look the same. The icon is yellow only as the `red_calendar`; the bar's own animation has no yellow version. |
 
 ## `[defaults.reminder]`
 

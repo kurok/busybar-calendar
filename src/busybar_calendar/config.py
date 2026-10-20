@@ -247,6 +247,12 @@ class DisplayConfig(_Strict):
     busy_color: str = Field(
         default="#FF0000FF", description="Its colour, `#RRGGBB` or `#RRGGBBAA`."
     )
+    tentative_yellow: bool = Field(
+        default=True,
+        description="Draw events you marked tentative in yellow - the calendar icon and the "
+        "label - so they differ from accepted ones. Off, they look the same. The icon is "
+        "yellow only as the `red_calendar`; the bar's own animation has no yellow version.",
+    )
 
     @field_validator("busy_label")
     @classmethod

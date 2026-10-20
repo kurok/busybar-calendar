@@ -5,7 +5,8 @@ The front panel is 72x16. A reminder is a 16x16 calendar icon with the
 event's title beside it and a countdown to the start. The status during an
 event is the same with a countdown to the end and a red BUSY beside it, or
 one of the bar's own 72x16 status animations. The icon is the bar's own
-calendar animation or a red calendar drawn inline, per `[display]`.
+calendar animation or a red calendar drawn inline, per `[display]`. An event
+you marked tentative gets a yellow calendar and a yellow BUSY instead.
 
 Every element carries `display_until`, so the bar takes the drawing down by
 itself even if this service has stopped - a minute after the screen ends
@@ -35,6 +36,8 @@ TEXT_X = ICON + 2
 REMINDER_ANIMATION = "shared/animations/calendar_reminder_16x16.anim"
 EVENT_ANIMATION = "shared/animations/calendar_event_16x16.anim"
 HIDDEN_TITLE = "Next event"
+# What an event you marked tentative is drawn in; see `[display] tentative_yellow`.
+TENTATIVE_COLOR = "#FFC800FF"
 # How long a drawing outlives its screen if nothing replaces it; see above.
 EXPIRY_GRACE = 60
 DRAW_PATH = "/api/display/draw"
@@ -139,12 +142,23 @@ def _text(
     )
 
 
-def _icon(choice: str, animation: str, until: str) -> Element:
+def _tentative(screen: Screen, display: DisplayConfig) -> bool:
+    return display.tentative_yellow and screen.event.response == "tentative"
+
+
+def _icon(choice: str, animation: str, until: str, tentative: bool) -> Element:
     # Different ids for the two kinds: a draw updates elements by id, and an
-    # element is not turned from one kind into the other.
+    # element is not turned from one kind into the other. The yellow calendar
+    # has an id of its own so that going from one colour to the other redraws
+    # the bitmap rather than relying on the bar to swap an element's pixels.
     if choice == "red_calendar":
         return XpmBitmapElement(
-            id="cal_xpm", data=icons.RED_CALENDAR, x=0, y=0, align="top_left", display_until=until
+            id="cal_xpm_maybe" if tentative else "cal_xpm",
+            data=icons.YELLOW_CALENDAR if tentative else icons.RED_CALENDAR,
+            x=0,
+            y=0,
+            align="top_left",
+            display_until=until,
         )
     return types.AnimationElement(
         id="cal_icon",
@@ -192,7 +206,7 @@ def _titled(
                 id="cal_busy",
                 text=display.busy_label,
                 font="small",
-                color=display.busy_color,
+                color=TENTATIVE_COLOR if _tentative(screen, display) else display.busy_color,
                 x=WIDTH,
                 y=LABEL_TOP_Y,
                 align="top_right",
@@ -208,11 +222,11 @@ def elements(screen: Screen, display: DisplayConfig) -> list[Element]:
         title = (
             title_text(screen.event.title, display) if screen.reminder.show_name else HIDDEN_TITLE
         )
-        icon = _icon(display.reminder_icon, REMINDER_ANIMATION, until)
+        icon = _icon(display.reminder_icon, REMINDER_ANIMATION, until, _tentative(screen, display))
         return _titled(screen, icon, title, display, until)
 
     if screen.status.show == "name":
-        icon = _icon(display.event_icon, EVENT_ANIMATION, until)
+        icon = _icon(display.event_icon, EVENT_ANIMATION, until, _tentative(screen, display))
         return _titled(screen, icon, title_text(screen.event.title, display), display, until)
     return [
         types.AnimationElement(

@@ -50,8 +50,13 @@ back to whatever it was showing.
 - **Rules by title**, from any calendar: keep `Focus time` off the bar,
   show `Lunch*` as the bar's own lunch status.
 - **Overlaps settled by your response**: an event you accepted wins over
-  one you marked tentative, which wins over one you have not answered; then,
-  as in Google's integration, the newest event wins.
+  one you marked tentative, which wins over one you have not answered - when
+  they start together and when they are shifted against each other, so a
+  "maybe" never covers a meeting you said yes to; then, as in Google's
+  integration, the newest event wins.
+- **"Maybe" in yellow**: an event you marked tentative gets a yellow
+  calendar and a yellow BUSY, so you can tell it from one you accepted
+  (`display.tentative_yellow`, default on).
 - **Google's filters**: no all-day or 24-hour-plus events. Also skipped:
   cancelled events, events marked free, invitations you declined.
 - **On time**: the loop wakes at the next change, not on the next poll.
@@ -132,6 +137,7 @@ The per-calendar settings are the Google Calendar integration's:
 | Event name, or a status from the list | `status.show`: `name`, `meeting`, `on_call`, `dnd`, ... |
 | Sound | `status.sound` |
 | *(not in Google's)* Busy status for events you marked tentative | `status.tentative` (default on) |
+| *(not in Google's)* Yellow calendar and BUSY for events you marked tentative | `display.tentative_yellow` (default on) |
 
 They layer: `[defaults]` for every calendar, then per source, then per
 calendar (`[sources.calendars."Work".reminder]`); a default set once is the
@@ -147,7 +153,8 @@ status.enabled = false
 ```
 
 `[display]` sets the look: the icons (`red_calendar` or the bar's own
-`animation`) and the word beside the countdown (`busy_label`, `busy_color`).
+`animation`), the word beside the countdown (`busy_label`, `busy_color`) and
+whether events you marked tentative are drawn in yellow (`tentative_yellow`).
 Every option, with its default, is in the
 [configuration reference](docs/configuration.md).
 
@@ -171,7 +178,7 @@ uv run ruff check . && uv run ruff format --check .
 
 ## License
 
-MIT, except the red calendar icon in `src/busybar_calendar/icons.py`: it is
-redrawn from Google's [Noto Emoji](https://github.com/googlefonts/noto-emoji)
-📅 and stays under the SIL Open Font License 1.1
+MIT, except the red and yellow calendar icons in `src/busybar_calendar/icons.py`:
+they are redrawn from Google's [Noto Emoji](https://github.com/googlefonts/noto-emoji)
+📅 and stay under the SIL Open Font License 1.1
 ([LICENSES/noto-emoji-OFL.txt](LICENSES/noto-emoji-OFL.txt)).
