@@ -174,7 +174,9 @@ def test_the_layout_in_the_config_is_the_one_drawn(layout, emulator, feed, write
     strict=True,
     raises=AssertionError,
     reason="the emulator answers /api/status/firmware with target 'emu'; the bar, and busylib's "
-    "model of it, have an integer, so `check` calls the emulator unreachable",
+    "model of it, have an integer, so `check` calls the emulator unreachable. Reported as "
+    "maxswinkels/busybar-emulator#1: when the pinned emulator has the fix this passes, strict "
+    "makes it fail, and the mark goes",
 )
 def test_check_finds_the_emulator_and_the_calendar(emulator, feed, write_config, start):
     later = now() + timedelta(hours=2)

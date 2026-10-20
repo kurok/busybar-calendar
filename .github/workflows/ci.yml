@@ -38,6 +38,7 @@ jobs:
       # Third-party code that runs in this job, so it is pinned to a commit that has been read
       # through (server.js and status_ws.js: no dependencies, no network access, no shell). To
       # move the pin, read the diff of those two files between the old commit and the new one.
+      # Waiting on a fix for maxswinkels/busybar-emulator#1: see the xfail in tests/emulator.
       - uses: actions/checkout@v7
         with:
           repository: maxswinkels/busybar-emulator
