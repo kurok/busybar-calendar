@@ -211,7 +211,27 @@ class BarConfig(_Strict):
         return _secret(dict(data), "token") if isinstance(data, dict) else data
 
 
+# The screen designs, in the order `init` offers them; the first is the default.
+# label, then what it draws.
+LAYOUTS: dict[str, tuple[str, str]] = {
+    "default": ("Default", "calendar icon, title, ticking countdown and BUSY"),
+    "banner": ("Banner", "the title on a band of the state colour, countdown and BUSY below"),
+    "bold_title": (
+        "Bold title",
+        "the title in a larger font, countdown and label in the state colour, no icon",
+    ),
+    "words": ("Words", "the default look with the response in words: MAYBE where BUSY would be"),
+}
+
+
 class DisplayConfig(_Strict):
+    layout: Literal["default", "banner", "bold_title", "words"] = Field(
+        default="default",
+        description="The screen design; `init` asks. "
+        + " ".join(f"`{key}`: {text}." for key, (_, text) in LAYOUTS.items())
+        + " `banner` and `bold_title` draw the title in the 7px font (`global` with "
+        '`title_font = "global"`), have no icon, and ignore `reminder_icon` and `event_icon`.',
+    )
     title_font: Literal["tiny", "small", "global"] = Field(
         default="small",
         description="`small` fits the title and countdown on two lines; `global` draws "

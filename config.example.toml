@@ -16,6 +16,10 @@ minutes_before = 5
 # turns that off.
 tentative = true
 
+# The screen design: default, banner, bold_title or words (`init` asks).
+# [display]
+# layout = "banner"
+
 # A CalDAV account: iCloud, Fastmail, Nextcloud, PrivateEmail, Radicale, ...
 [[sources]]
 name = "iCloud"

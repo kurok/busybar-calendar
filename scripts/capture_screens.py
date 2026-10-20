@@ -68,6 +68,12 @@ def scenarios(now: datetime):
     yield "status", Screen("status", event("Design review", -2, 45), reminder, status), small, 1
     maybe = event("Design review", -2, 45, "tentative")
     yield "status-tentative", Screen("status", maybe, reminder, status), small, 1
+    # The other screen designs, an event you accepted and one you marked Maybe.
+    for layout, label in (("banner", "banner"), ("bold_title", "bold-title"), ("words", "words")):
+        design = DisplayConfig(layout=layout)
+        accepted = Screen("status", event("Design review", -2, 45), reminder, status)
+        yield f"design-{label}", accepted, design, 1
+        yield f"design-{label}-maybe", Screen("status", maybe, reminder, status), design, 1
     in_progress = event("Design review", -2, 45)
     yield "status-meeting", Screen("status", in_progress, reminder, meeting), small, 18
     long_title = event("Quarterly planning with the design team", 10)

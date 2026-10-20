@@ -189,3 +189,30 @@ def test_a_bad_setting_says_where_it_is(tmp_path):
     with pytest.raises(ValidationError) as caught:
         Config.model_validate(base(calendars={"Team": {"reminder": {"minutes_before": 0}}}))
     assert caught.value.errors()[0]["loc"] == ("sources", 0, "calendars", "Team", "reminder")
+
+
+def test_the_layout_defaults_to_the_current_design_and_lists_every_design():
+    from typing import get_args
+
+    from busybar_calendar.config import LAYOUTS, DisplayConfig
+
+    assert DisplayConfig().layout == "default"
+    assert next(iter(LAYOUTS)) == "default"  # the first one `init` offers
+    assert set(get_args(DisplayConfig.model_fields["layout"].annotation)) == set(LAYOUTS)
+
+
+def test_each_layout_loads_from_a_config_file(tmp_path):
+    from busybar_calendar.config import LAYOUTS
+
+    for layout in LAYOUTS:
+        path = tmp_path / f"{layout}.toml"
+        path.write_text(
+            '[[sources]]\nname = "Work"\ntype = "ics"\nurl = "https://x"\n'
+            f'[display]\nlayout = "{layout}"\n'
+        )
+        assert load(path).display.layout == layout
+
+
+def test_an_unknown_layout_is_refused():
+    with pytest.raises(ValidationError, match="layout"):
+        Config.model_validate({**base(), "display": {"layout": "neon"}})

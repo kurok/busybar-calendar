@@ -37,6 +37,32 @@ on top of any status. A sound plays as a reminder opens and as an event
 starts, using the bar's own calendar sounds. After the event, the bar goes
 back to whatever it was showing.
 
+## Screen designs
+
+Four designs for the same information. `busybar-calendar init` asks which one to
+draw, and the first, the default, is what you get if you do not choose. To change
+it later, set `layout` under `[display]`; the running service applies it within a
+minute.
+
+| Design | An event you accepted | Marked "Maybe" |
+| --- | --- | --- |
+| **1. Default** (`default`): the calendar icon, the title, a ticking countdown and BUSY. A Maybe gets a yellow calendar and a yellow BUSY. | ![Default design](docs/images/status.png) | ![Default design, Maybe](docs/images/status-tentative.png) |
+| **2. Banner** (`banner`): the title on a band of the state colour, the countdown and BUSY below. Red when accepted, white before the start, and a yellow outline for a Maybe. | ![Banner design](docs/images/design-banner.png) | ![Banner design, Maybe](docs/images/design-banner-maybe.png) |
+| **3. Bold title** (`bold_title`): the title in the larger 7 px font, the countdown and the label in the state colour, no icon. A Maybe says MAYBE. | ![Bold title design](docs/images/design-bold-title.png) | ![Bold title design, Maybe](docs/images/design-bold-title-maybe.png) |
+| **4. Words** (`words`): the default look, with the response in words: MAYBE where BUSY would be, already in the reminder. | ![Words design](docs/images/design-words.png) | ![Words design, Maybe](docs/images/design-words-maybe.png) |
+
+The countdown ticks on the bar itself in all four. Banner and Bold title draw the
+title in the 7 px font (the 11 px `global` font with `title_font = "global"`), so
+`title_font = "small"` and the icon options do not apply to them. A title that does
+not fit scrolls, in every design. A Maybe looks like an accepted event when
+`tentative_yellow` is off.
+
+The three extra designs were picked from ten whole-screen concepts, each scored on
+legibility, how well it tells a Maybe from an accepted event (also for red-green
+colour blindness), information, stress cases, load on the panel, and effort to run;
+those scoring over 70 of 100 were kept. Banner's filled red band has black lettering
+that reads best close up; the hollow Maybe band reads best from a distance.
+
 ## Features
 
 - **CalDAV** with discovery (`/.well-known/caldav`, principal, calendar home),
@@ -139,6 +165,7 @@ The per-calendar settings are the Google Calendar integration's:
 | Sound | `status.sound` |
 | *(not in Google's)* Busy status for events you marked tentative | `status.tentative` (default on) |
 | *(not in Google's)* Yellow calendar and BUSY for events you marked tentative | `display.tentative_yellow` (default on) |
+| *(not in Google's)* Which screen design | `display.layout`: `default`, `banner`, `bold_title`, `words` |
 
 They layer: `[defaults]` for every calendar, then per source, then per
 calendar (`[sources.calendars."Work".reminder]`); a default set once is the
@@ -153,9 +180,10 @@ reminder.enabled = false
 status.enabled = false
 ```
 
-`[display]` sets the look: the icons (`red_calendar` or the bar's own
-`animation`), the word beside the countdown (`busy_label`, `busy_color`) and
-whether events you marked tentative are drawn in yellow (`tentative_yellow`).
+`[display]` sets the look: the screen design (`layout`, see above), the icons
+(`red_calendar` or the bar's own `animation`), the word beside the countdown
+(`busy_label`, `busy_color`) and whether events you marked tentative are drawn in
+yellow (`tentative_yellow`).
 Every option, with its default, is in the
 [configuration reference](docs/configuration.md).
 

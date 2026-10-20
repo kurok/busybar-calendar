@@ -366,3 +366,93 @@ async def test_run_calls_its_hook_at_every_wake():
 
     await asyncio.wait_for(runner.run(stop, hook), 2)
     assert calls == [1, 1]
+
+
+def with_layout(layout):
+    return Config.model_validate(
+        {
+            "display": {"layout": layout},
+            "sources": [{"name": "Work", "type": "ics", "url": "https://x"}],
+        }
+    )
+
+
+async def calls_for(layout, response, minutes=(5, 10, 40)):
+    runner, bar, _ = make([meeting(response=response)], with_layout(layout))
+    await runner.refresh(at(5))
+    for minute in minutes:
+        await runner.tick(at(minute))
+    return [c for c in bar.calls if c[0] != "sound"]
+
+
+async def test_banner_clears_when_the_band_changes_colour():
+    # The reminder's band is white and the event's red: other ids, so clear and draw.
+    assert await calls_for("banner", "accepted") == [
+        CLEAR,
+        ("draw", ["cal_band_r", "cal_title", "cal_time"]),
+        CLEAR,
+        ("draw", ["cal_band", "cal_title", "cal_time", "cal_busy"]),
+        CLEAR,
+    ]
+
+
+async def test_a_tentative_banner_adds_busy_in_place():
+    assert await calls_for("banner", "tentative") == [
+        CLEAR,
+        ("draw", ["cal_band_m", "cal_title_m", "cal_time"]),
+        ("draw", ["cal_band_m", "cal_title_m", "cal_time", "cal_busy_m"]),
+        CLEAR,
+    ]
+
+
+async def test_bold_title_clears_when_the_countdown_changes_colour():
+    assert await calls_for("bold_title", "accepted") == [
+        CLEAR,
+        ("draw", ["cal_title", "cal_time_r"]),
+        CLEAR,
+        ("draw", ["cal_title", "cal_time_a", "cal_busy"]),
+        CLEAR,
+    ]
+
+
+async def test_words_updates_in_place_like_the_default():
+    assert await calls_for("words", "accepted") == [
+        CLEAR,
+        TITLED,
+        BUSY,  # the reminder's elements plus BUSY, no clear
+        CLEAR,
+    ]
+    # A tentative event has said MAYBE since its reminder: nothing is added at the start.
+    maybe = ("draw", ["cal_xpm_maybe", "cal_title", "cal_time", "cal_busy_m"])
+    assert await calls_for("words", "tentative") == [CLEAR, maybe, maybe, CLEAR]
+
+
+async def test_an_accepted_event_replaces_a_tentative_one_in_every_design():
+    for layout in ("banner", "bold_title", "words"):
+        runner, bar, _ = make(
+            [
+                meeting(0, 60, "Maybe", "tentative", uid="t"),
+                meeting(20, 30, "Sure", "accepted", uid="a"),
+            ],
+            with_layout(layout),
+        )
+        await runner.refresh(at(10))
+        for minute in (10, 21, 51):
+            await runner.tick(at(minute))
+        # Each switch of look clears first, so nothing of the other look is left underneath.
+        calls = [c for c in bar.calls if c[0] != "sound"]
+        assert [c[0] for c in calls] == ["clear", "draw"] * 3, layout
+
+
+async def test_changing_the_layout_in_the_config_redraws_with_the_new_design():
+    runner, bar, source = make([meeting()], with_layout("default"))
+    await runner.refresh(at(5))
+    await runner.tick(at(5))
+    runner.reconfigure(with_layout("banner"), [source])  # what an edited config file does
+    await runner.refresh(at(6))
+    await runner.tick(at(6))
+    assert [c for c in bar.calls if c[0] == "draw"][-1] == (
+        "draw",
+        ["cal_band_r", "cal_title", "cal_time"],
+    )
+    assert bar.calls[-2] == CLEAR  # the default's elements are taken down first, not left behind

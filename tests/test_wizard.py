@@ -37,8 +37,8 @@ class FakeStore:
 
 def test_cloud_and_an_icloud_account(tmp_path):
     path = tmp_path / "busybar-calendar" / "config.toml"
-    # cloud (default), CalDAV (default), username, the guessed provider, two calendars
-    ask = script("", "", "me@icloud.com", "", "2, 1")
+    # cloud (default), CalDAV (default), username, the guessed provider, two calendars, the design
+    ask = script("", "", "me@icloud.com", "", "2, 1", "")
     store = FakeStore()
     assert wizard.run(path, ask=ask, store=store, discover=lambda source: FOUND) == 0
 
@@ -62,7 +62,7 @@ def test_cloud_and_an_icloud_account(tmp_path):
 
 def test_usb_and_an_ics_link(tmp_path):
     path = tmp_path / "config.toml"
-    ask = script("3", "2", "webcal://example.com/team.ics")
+    ask = script("3", "2", "webcal://example.com/team.ics", "")
     assert wizard.run(path, ask=ask, store=FakeStore(), discover=None) == 0
     config = load(path)
     assert config.bar.address == "10.0.4.20"
@@ -79,7 +79,7 @@ def test_wifi_without_a_keychain_and_a_failed_sign_in(tmp_path, capsys):
     def refuse(source):
         raise CalDAVAuthError("PROPFIND https://dav.example.com: 401, check the credentials", 401)
 
-    ask = script("2", "192.168.1.50", "1", "me@example.com", "", "https://dav.example.com")
+    ask = script("2", "192.168.1.50", "1", "me@example.com", "", "https://dav.example.com", "")
     assert wizard.run(path, ask=ask, store=FakeStore(keychain=False), discover=refuse) == 0
     out = capsys.readouterr().out
     assert "Could not sign in" in out
@@ -92,16 +92,16 @@ def test_wifi_without_a_keychain_and_a_failed_sign_in(tmp_path, capsys):
 
 def test_all_calendars_when_none_are_picked(tmp_path):
     path = tmp_path / "config.toml"
-    ask = script("3", "1", "me@example.com", "", "https://dav.example.com", "")
+    ask = script("3", "1", "me@example.com", "", "https://dav.example.com", "", "")
     wizard.run(path, ask=ask, store=FakeStore(), discover=lambda source: FOUND)
     assert load(path).sources[0].include == []
 
 
 def test_bad_answers_are_asked_again(tmp_path):
     path = tmp_path / "config.toml"
-    ask = script("9", "x", "3", "2", "https://example.com/a.ics")
+    ask = script("9", "x", "3", "2", "https://example.com/a.ics", "")
     assert wizard.run(path, ask=ask, store=FakeStore(), discover=None) == 0
-    assert len(ask.asked) == 5
+    assert len(ask.asked) == 6
 
 
 def test_an_existing_config_is_kept_unless_confirmed(tmp_path):
@@ -109,7 +109,7 @@ def test_an_existing_config_is_kept_unless_confirmed(tmp_path):
     path.write_text("keep me")
     assert wizard.run(path, ask=script("n"), store=FakeStore(), discover=None) == 1
     assert path.read_text() == "keep me"
-    ask = script("y", "3", "2", "https://example.com/a.ics")
+    ask = script("y", "3", "2", "https://example.com/a.ics", "")
     assert wizard.run(path, ask=ask, store=FakeStore(), discover=None) == 0
     assert "keep me" not in path.read_text()
 
@@ -194,7 +194,7 @@ def test_keychain_prompt_is_asked_again_then_gives_up_cleanly(monkeypatch, capsy
 
 def caldav_source(tmp_path, *answers):
     path = tmp_path / "config.toml"
-    ask = script("3", "1", *answers)  # USB, CalDAV, then the answers given
+    ask = script("3", "1", *answers, "")  # USB, CalDAV, the answers given, the default design
     wizard.run(path, ask=ask, store=FakeStore(), discover=lambda source: FOUND)
     return load(path).sources[0], ask
 
@@ -215,3 +215,42 @@ def test_fastmail_is_guessed(tmp_path):
     source, ask = caldav_source(tmp_path, "me@fastmail.com", "", "")
     assert (source.name, source.url) == ("Fastmail", "https://caldav.fastmail.com")
     assert ask.asked[3] == "Choose 1-5 [2]: "
+
+
+def design(tmp_path, answer):
+    tmp_path.mkdir(exist_ok=True)
+    path = tmp_path / "config.toml"
+    ask = script("3", "2", "webcal://example.com/team.ics", *answer)  # USB, ICS, then the design
+    wizard.run(path, ask=ask, store=FakeStore(), discover=None)
+    return path, ask
+
+
+def test_the_default_design_is_first_and_is_not_written(tmp_path):
+    path, ask = design(tmp_path, [""])
+    assert ask.asked[-1] == "Choose 1-4 [1]: "
+    assert "[display]" not in path.read_text()  # a later default stays the default
+    assert load(path).display.layout == "default"
+
+
+def test_each_design_can_be_chosen(tmp_path, capsys):
+    from busybar_calendar.config import LAYOUTS
+
+    for number, layout in enumerate(LAYOUTS, 1):
+        path, _ = design(tmp_path / layout, [str(number)])
+        assert load(path).display.layout == layout
+    out = capsys.readouterr().out
+    assert "  1  Default: " in out  # the default is number 1
+    assert all(f"{label}:" in out for label, _ in LAYOUTS.values())
+
+
+def test_the_design_goes_in_its_own_section_before_the_sources(tmp_path):
+    path, _ = design(tmp_path, ["3"])
+    text = path.read_text()
+    assert '[display]\nlayout = "bold_title"' in text
+    assert text.index("[bar]") < text.index("[display]") < text.index("[[sources]]")
+
+
+def test_a_bad_design_answer_is_asked_again(tmp_path):
+    path, ask = design(tmp_path, ["7", "x", "2"])
+    assert load(path).display.layout == "banner"
+    assert len(ask.asked) == 6
