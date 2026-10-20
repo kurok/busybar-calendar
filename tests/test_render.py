@@ -1,4 +1,7 @@
+import dataclasses
 from datetime import UTC, datetime, timedelta
+
+import pytest
 
 from busybar_calendar import icons
 from busybar_calendar.config import DisplayConfig, ReminderSettings, StatusSettings
@@ -12,8 +15,9 @@ EVENT = Event(
 )
 
 
-def screen(kind="reminder", reminder=None, status=None):
-    return Screen(kind, EVENT, reminder or ReminderSettings(), status or StatusSettings())
+def screen(kind="reminder", reminder=None, status=None, response="accepted"):
+    event = dataclasses.replace(EVENT, response=response)
+    return Screen(kind, event, reminder or ReminderSettings(), status or StatusSettings())
 
 
 def by_id(d):
@@ -106,8 +110,74 @@ def test_no_busy_label_with_the_global_font():
     assert "cal_busy" not in elements
 
 
-def test_red_calendar_is_valid_xpm2():
-    lines = icons.RED_CALENDAR.splitlines()
+def test_tentative_event_gets_the_yellow_calendar_and_busy():
+    for kind in ("reminder", "status"):
+        elements = by_id(drawing(screen(kind, response="tentative"), DisplayConfig(), "a", 91))
+        assert "cal_xpm" not in elements
+        icon = elements["cal_xpm_maybe"]
+        assert (icon.type, icon.data) == ("xpmbitmap", icons.YELLOW_CALENDAR)
+        assert icon.data != icons.RED_CALENDAR
+        # The same place and size as the red one: only the colours differ.
+        red = by_id(drawing(screen(kind), DisplayConfig(), "a", 91))["cal_xpm"]
+        assert (icon.x, icon.y, icon.align) == (red.x, red.y, red.align)
+        assert list(elements) == (
+            ["cal_xpm_maybe", "cal_title", "cal_time", "cal_busy"]
+            if kind == "status"
+            else ["cal_xpm_maybe", "cal_title", "cal_time"]
+        )
+    busy = by_id(drawing(screen("status", response="tentative"), DisplayConfig(), "a", 91))
+    assert (busy["cal_busy"].text, busy["cal_busy"].color) == ("BUSY", "#FFC800FF")
+
+
+def test_yellow_is_for_tentative_only():
+    # Answered "yes", or not at all: the red calendar and the configured BUSY colour.
+    for response in ("accepted", "needs-action"):
+        elements = by_id(drawing(screen("status", response=response), DisplayConfig(), "a", 91))
+        assert elements["cal_xpm"].data == icons.RED_CALENDAR
+        assert elements["cal_busy"].color == "#FF0000FF"
+        assert "cal_xpm_maybe" not in elements
+
+
+def test_yellow_can_be_turned_off():
+    display = DisplayConfig(tentative_yellow=False)
+    elements = by_id(drawing(screen("status", response="tentative"), display, "a", 91))
+    assert elements["cal_xpm"].data == icons.RED_CALENDAR
+    assert elements["cal_busy"].color == "#FF0000FF"
+    assert "cal_xpm_maybe" not in elements
+
+
+def test_yellow_busy_keeps_its_place_and_ignores_the_busy_colour():
+    display = DisplayConfig(busy_color="#00FF00", busy_label="IN MTG")
+    busy = by_id(drawing(screen("status", response="tentative"), display, "a", 91))["cal_busy"]
+    assert (busy.text, busy.color, busy.align, busy.x, busy.y) == (
+        "IN MTG",
+        "#FFC800FF",
+        "top_right",
+        72,
+        8,
+    )
+
+
+def test_the_bars_own_animations_have_no_yellow_version():
+    display = DisplayConfig(event_icon="animation", reminder_icon="animation")
+    for kind, animation in (("reminder", "reminder"), ("status", "event")):
+        elements = by_id(drawing(screen(kind, response="tentative"), display, "a", 91))
+        assert (
+            elements["cal_icon"].stock_path == f"shared/animations/calendar_{animation}_16x16.anim"
+        )
+    # The label is still yellow beside the animation.
+    assert elements["cal_busy"].color == "#FFC800FF"
+
+
+def test_stock_status_animation_ignores_tentative():
+    status = StatusSettings(show="meeting")
+    d = drawing(screen("status", status=status, response="tentative"), DisplayConfig(), "a", 91)
+    assert [e.id for e in d.elements] == ["cal_status"]
+
+
+@pytest.mark.parametrize("calendar", ["RED_CALENDAR", "YELLOW_CALENDAR"])
+def test_calendars_are_valid_xpm2(calendar):
+    lines = getattr(icons, calendar).splitlines()
     assert lines[0] == "! XPM2"
     width, height, colours, cpp = map(int, lines[1].split())
     assert (width, height, cpp) == (16, 16, 1)

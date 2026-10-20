@@ -44,6 +44,7 @@ class Screen:
             self.event.key,
             self.event.title,
             self.event.end,
+            self.event.response,
             self.reminder,
             self.status,
         )

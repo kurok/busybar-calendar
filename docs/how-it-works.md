@@ -41,7 +41,7 @@ reminder on top of a BUSY session or the clock the way the integration does.
 | `schedule.py` | Pure logic: which screen is due now, and when that next changes. |
 | `render.py` | The display elements for a screen, and its sound. |
 | `runner.py` | The loop: refresh, decide, draw or clear, sleep until the next change. |
-| `icons.py` | The red calendar, as an XPM2 image drawn inline. |
+| `icons.py` | The red and yellow calendars, as XPM2 images drawn inline. |
 | `config.py` | The TOML config, its models and where it is found; each option's description lives here. |
 | `connect.py` | What every command shares: the bar client, the sources, stopping on a signal. |
 | `diagnose.py` | `check` and `status`, as text or JSON. |
@@ -70,9 +70,23 @@ until the start, and a **status** runs from the start to the end.
      a reminder for your next meeting replaces the status of the one still
      running, as long as you are as sure to attend the next one;
   3. then the calendar configured last.
+- The response ranks whole screens, so it holds however two events are
+  placed against each other. With Maybe 10:00-11:00 and Sure 10:30-11:30
+  the bar shows Maybe, then Sure from its reminder at 10:25 until it
+  ends at 11:30 - Maybe's end at 11:00 changes nothing. With Sure
+  10:00-11:00 and Maybe 10:30-11:30, Maybe's reminder and start do not
+  cut in, and Maybe appears when Sure ends. A tentative event never takes
+  the bar from an accepted one that is showing something.
 - An event you marked tentative puts the busy status up like any other,
   unless `status.tentative = false`: then it keeps its reminder but never
   shows as busy, and whatever else is on carries on.
+- A tentative event is also drawn differently: a yellow calendar and a yellow
+  `BUSY`, in its reminder and its status alike, where an accepted or
+  unanswered one gets the red ones. `display.tentative_yellow = false`
+  draws them all in red. A calendar icon set to the bar's own `animation`
+  stays as it is (the stock animation has no yellow version) and only the
+  label turns yellow, and a stock status such as `meeting` is never recoloured.
+  Changing your answer on your phone redraws the screen at the next refresh.
 - Like Google: events of 24 hours or more, and all-day events, are not
   shown.
 - Also skipped: `STATUS:CANCELLED`, `TRANSP:TRANSPARENT` (free) unless
@@ -85,18 +99,21 @@ until the start, and a **status** runs from the start to the end.
 | Element | Reminder | Status (`show = "name"`) | Status (`show = "meeting"` etc.) |
 | --- | --- | --- | --- |
 | `cal_xpm` | the red calendar (default) | the red calendar (default) | |
+| `cal_xpm_maybe` | the yellow calendar, for a tentative event | the yellow calendar, for a tentative event | |
 | `cal_icon` | `shared/animations/calendar_reminder_16x16.anim` with `reminder_icon = "animation"` | `shared/animations/calendar_event_16x16.anim` with `event_icon = "animation"` | |
 | `cal_title` | title, `small` font, scrolls if long | title | |
 | `cal_time` | countdown to the start | countdown to the end | |
-| `cal_busy` | | `BUSY` in red, right-aligned on the countdown's line | |
+| `cal_busy` | | `BUSY` in red (yellow for a tentative event), right-aligned on the countdown's line | |
 | `cal_status` | | | `shared/animations/<status>_72x16.anim` |
 
-The red calendar travels inside each drawing as an XPM2 `xpmbitmap`
+The calendar travels inside each drawing as an XPM2 `xpmbitmap`
 element (the firmware takes up to 32 colours, full colour on the front
 display), so nothing is uploaded to the bar. busylib 2.6 has no model for
 that element, so drawings are posted with `api_request` rather than
-`display_draw`. The icon is redrawn from Noto Emoji's 📅 at 16x16; see
-`icons.py` for the pixels and its licence.
+`display_draw`. The icons are redrawn from Noto Emoji's 📅 at 16x16; see
+`icons.py` for the pixels and their licence. The yellow one has an element id of its own
+(`cal_xpm_maybe`), so a switch between the colours clears and redraws the
+icon instead of depending on the bar swapping an existing bitmap's pixels.
 
 Sounds: `shared/sounds/calendar_reminder_ends.snd` when a reminder opens and
 `shared/sounds/calendar_event_starts.snd` when an event starts. Both can be

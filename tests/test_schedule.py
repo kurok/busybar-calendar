@@ -110,6 +110,101 @@ def test_same_start_accepted_wins_over_calendar_order():
     assert choose(at(26), events, settings()).event.title == "Focus time"
 
 
+def shown(minute, events):
+    screen = choose(at(minute), events, settings())
+    return None if screen is None else (screen.kind, screen.event.title)
+
+
+def test_accepted_wins_over_tentative_at_the_same_time():
+    # Same start and end; the tentative one is on the earlier calendar and listed first.
+    events = [
+        answered("Maybe", 0, 60, "tentative", calendar=HOME),
+        answered("Sure", 0, 60, "accepted", calendar=WORK),
+    ]
+    assert shown(30, events) == ("status", "Sure")
+    assert shown(30, events[::-1]) == ("status", "Sure")  # and not by list order
+
+
+def test_accepted_wins_when_it_starts_after_the_tentative_one():
+    # Maybe 0-60, Sure 20-80: the accepted reminder (15) and status (20) take the
+    # bar, and the tentative event does not come back while Sure is still on.
+    events = [answered("Maybe", 0, 60, "tentative"), answered("Sure", 20, 60, "accepted")]
+    assert shown(10, events) == ("status", "Maybe")
+    assert shown(16, events) == ("reminder", "Sure")
+    assert shown(30, events) == ("status", "Sure")
+    assert shown(65, events) == ("status", "Sure")  # Maybe is over by now
+    assert shown(81, events) is None
+
+
+def test_accepted_wins_when_it_starts_before_the_tentative_one():
+    # Sure 0-40, Maybe 20-80: Maybe's status does not cut in at 20, and takes the
+    # bar when Sure ends.
+    events = [answered("Sure", 0, 40, "accepted"), answered("Maybe", 20, 60, "tentative")]
+    assert shown(10, events) == ("status", "Sure")
+    assert shown(25, events) == ("status", "Sure")
+    assert shown(39.9, events) == ("status", "Sure")
+    assert shown(40, events) == ("status", "Maybe")
+    assert shown(81, events) is None
+
+
+def test_accepted_inside_a_longer_tentative_event():
+    # Maybe 0-120 with Sure 30-60 in the middle: Sure for its slot, Maybe around it.
+    events = [answered("Maybe", 0, 120, "tentative"), answered("Sure", 30, 30, "accepted")]
+    assert [shown(m, events) for m in (10, 26, 45, 60, 90)] == [
+        ("status", "Maybe"),
+        ("reminder", "Sure"),
+        ("status", "Sure"),
+        ("status", "Maybe"),
+        ("status", "Maybe"),
+    ]
+
+
+def test_a_tentative_reminder_does_not_interrupt_an_accepted_event():
+    # Maybe starts at 40 and would remind from 35, while Sure runs until 60.
+    events = [answered("Sure", 0, 60, "accepted"), answered("Maybe", 40, 30, "tentative")]
+    assert shown(36, events) == ("status", "Sure")
+    assert shown(45, events) == ("status", "Sure")
+    assert shown(61, events) == ("status", "Maybe")
+
+
+def test_a_chain_of_shifted_events_always_shows_the_accepted_one():
+    events = [
+        answered("Maybe 1", 0, 50, "tentative"),
+        answered("Sure", 20, 50, "accepted"),
+        answered("Maybe 2", 40, 50, "tentative"),
+    ]
+    assert [shown(m, events) for m in (10, 30, 55, 69, 71, 85)] == [
+        ("status", "Maybe 1"),
+        ("status", "Sure"),
+        ("status", "Sure"),
+        ("status", "Sure"),
+        ("status", "Maybe 2"),
+        ("status", "Maybe 2"),
+    ]
+
+
+def test_an_accepted_event_without_a_status_leaves_the_bar_to_the_tentative_one():
+    # The settings decide what an event shows; an accepted event that puts nothing
+    # up (a rule turned its status and reminder off) cannot take the bar from anyone.
+    events = [answered("Quiet", 0, 60, "accepted"), answered("Maybe", 0, 60, "tentative")]
+
+    def for_event(event):
+        if event.title == "Quiet":
+            return ReminderSettings(enabled=False), StatusSettings(enabled=False)
+        return ReminderSettings(), StatusSettings()
+
+    assert choose(at(30), events, for_event).event.title == "Maybe"
+
+
+def test_screen_key_follows_the_response():
+    # The look depends on it, so an answer changed from the phone redraws the screen.
+    s = settings()
+    accepted = [answered("Sync", 0, 60, "accepted")]
+    maybe = [answered("Sync", 0, 60, "tentative")]
+    assert choose(at(5), accepted, s).key != choose(at(5), maybe, s).key
+    assert choose(at(5), maybe, s).key == choose(at(6), maybe, s).key
+
+
 def test_tentative_beats_unanswered_and_ties_fall_back_to_newest():
     events = [answered("No reply", 0, 60, "needs-action"), answered("Maybe", 10, 30, "tentative")]
     assert choose(at(20), events, settings()).event.title == "Maybe"

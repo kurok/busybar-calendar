@@ -12,7 +12,8 @@ minutes_before = 5
 
 [defaults.status]
 # Events you marked tentative ("maybe") show as busy too; false keeps only
-# their reminder.
+# their reminder. They are drawn in yellow; [display] tentative_yellow = false
+# turns that off.
 tentative = true
 
 # A CalDAV account: iCloud, Fastmail, Nextcloud, PrivateEmail, Radicale, ...

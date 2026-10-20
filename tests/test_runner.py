@@ -13,6 +13,8 @@ REF = CalendarRef("Work", "Work", 0)
 CONFIG = Config.model_validate({"sources": [{"name": "Work", "type": "ics", "url": "https://x"}]})
 TITLED = ("draw", ["cal_xpm", "cal_title", "cal_time"])  # the reminder
 BUSY = ("draw", ["cal_xpm", "cal_title", "cal_time", "cal_busy"])  # the status
+MAYBE = ("draw", ["cal_xpm_maybe", "cal_title", "cal_time"])  # a tentative reminder
+MAYBE_BUSY = ("draw", ["cal_xpm_maybe", "cal_title", "cal_time", "cal_busy"])  # its status
 CLEAR = ("clear", "busybar-calendar")
 
 
@@ -63,9 +65,9 @@ def at(minutes):
     return T0 + timedelta(minutes=minutes)
 
 
-def meeting(start_min=10, length=30, title="Sync"):
+def meeting(start_min=10, length=30, title="Sync", response="accepted", uid="m"):
     start = at(start_min)
-    return Event("m", title, start, start + timedelta(minutes=length), REF)
+    return Event(uid, title, start, start + timedelta(minutes=length), REF, response)
 
 
 async def test_full_life_of_an_event():
@@ -84,6 +86,51 @@ async def test_full_life_of_an_event():
         ("sound", "calendar_event_starts.snd"),
         CLEAR,
     ]
+
+
+async def test_tentative_event_is_drawn_yellow_and_updated_in_place():
+    runner, bar, _ = make([meeting(response="tentative")])
+    await runner.refresh(at(5))
+    await runner.tick(at(5))
+    await runner.tick(at(10))
+    # Yellow for the reminder and the status alike; the status only adds BUSY.
+    assert [c for c in bar.calls if c[0] != "sound"] == [CLEAR, MAYBE, MAYBE_BUSY]
+
+
+async def test_accepted_event_takes_the_bar_from_a_tentative_one_and_gives_it_back():
+    # Maybe 0-60 is on; Sure 20-50 starts in the middle of it.
+    runner, bar, _ = make(
+        [
+            meeting(0, 60, "Maybe", "tentative", uid="t"),
+            meeting(20, 30, "Sure", "accepted", uid="a"),
+        ]
+    )
+    await runner.refresh(at(10))
+    for minute in (10, 14, 16, 21, 51, 61):
+        await runner.tick(at(minute))
+    assert [c for c in bar.calls if c[0] != "sound"] == [
+        CLEAR,
+        MAYBE_BUSY,  # 10: the tentative event is on, in yellow
+        CLEAR,  # 15: Sure's reminder takes over - red, so its own element ids
+        TITLED,
+        BUSY,  # 20: Sure's status
+        CLEAR,  # 50: Sure is over, and the yellow one is back
+        MAYBE_BUSY,
+        CLEAR,  # 60: nothing left
+    ]
+
+
+async def test_changing_your_answer_redraws_the_screen():
+    # Marked "maybe" from the phone while the reminder is up: yellow without waiting.
+    runner, bar, source = make([meeting(response="accepted")])
+    await runner.refresh(at(5))
+    await runner.tick(at(5))
+    source.events = [meeting(response="tentative")]
+    await runner.refresh(at(6))
+    await runner.tick(at(6))
+    assert [c for c in bar.calls if c[0] != "sound"] == [CLEAR, TITLED, CLEAR, MAYBE]
+    # Not a second chime for the same reminder.
+    assert [c for c in bar.calls if c[0] == "sound"] == [("sound", "calendar_reminder_ends.snd")]
 
 
 async def test_same_elements_update_in_place():

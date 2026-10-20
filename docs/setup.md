@@ -158,7 +158,9 @@ minutes_before = 10
 Your answer to each invitation is read from your attendee entry, found by
 your address: declined invitations are skipped, and when two events overlap,
 the one you accepted wins over one you marked tentative or have not
-answered. The address defaults to `username` when that is an email address;
+answered - whether they start together or one is shifted against the other.
+An event you marked tentative ("Maybe") is drawn with a yellow calendar and
+a yellow BUSY instead of the red ones. The address defaults to `username` when that is an email address;
 set `emails = [...]` if your invitations go to another one.
 
 ### ICS / webcal feeds
