@@ -25,6 +25,7 @@ through `GET /api/screen`.
 | --- | --- |
 | **Before the event** - a red calendar, the title, and a countdown to the start. | ![Reminder](docs/images/reminder.gif) |
 | **During the event** - a red calendar, the title, a countdown to the end and a red **BUSY** ... | ![Status with the event name](docs/images/status.png) |
+| **Marked "Maybe"** (tentative): a yellow calendar and a yellow **BUSY**, in the reminder and during the event, so you can tell it from one you accepted. | ![Status of a tentative event](docs/images/status-tentative.png) |
 | ... or one of the bar's own statuses, such as `meeting`, `on_call` or `dnd`. | ![Meeting status](docs/images/status-meeting.gif) |
 | **Long titles** scroll beside the icon. | ![Scrolling title](docs/images/long-title.gif) |
 | **Titles in other scripts** are transliterated for the bar's bitmap fonts (`Планування спринту` becomes `Planuvannya sprintu`) ... | ![Transliterated title](docs/images/cyrillic-transliterated.gif) |

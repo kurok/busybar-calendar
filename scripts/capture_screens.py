@@ -6,6 +6,12 @@ front display back through GET /api/screen, and saves it as LED-style PNGs,
 plus GIFs for the moving ones. Sounds stay off. Needs Pillow:
 
     uv run --with pillow python scripts/capture_screens.py -c config.toml docs/images
+
+With the service running, a capture takes its screen down: the drawing goes up
+over whatever the service has on the bar - under another application name too,
+the firmware swaps the canvas - and what it replaces does not come back by
+itself, as the service only redraws at its next change. Stop the service first,
+or touch its config file afterwards, which makes it redraw at once.
 """
 
 from __future__ import annotations
@@ -50,9 +56,9 @@ def scenarios(now: datetime):
     """(file name, screen, display settings, frames: 1 for a PNG, more for a GIF)."""
     ref = CalendarRef("Work", "Work", 0)
 
-    def event(title: str, start_in: int, length: int = 30) -> Event:
+    def event(title: str, start_in: int, length: int = 30, response: str = "accepted") -> Event:
         start = now + timedelta(minutes=start_in)
-        return Event("doc", title, start, start + timedelta(minutes=length), ref)
+        return Event("doc", title, start, start + timedelta(minutes=length), ref, response)
 
     reminder, status, small = ReminderSettings(), StatusSettings(), DisplayConfig()
     meeting = StatusSettings(show="meeting")
@@ -60,6 +66,8 @@ def scenarios(now: datetime):
     cyrillic = event("Планування спринту", 5)
     yield "reminder", Screen("reminder", event("Design review", 5), reminder, status), small, 18
     yield "status", Screen("status", event("Design review", -2, 45), reminder, status), small, 1
+    maybe = event("Design review", -2, 45, "tentative")
+    yield "status-tentative", Screen("status", maybe, reminder, status), small, 1
     in_progress = event("Design review", -2, 45)
     yield "status-meeting", Screen("status", in_progress, reminder, meeting), small, 18
     long_title = event("Quarterly planning with the design team", 10)

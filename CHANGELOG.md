@@ -17,6 +17,9 @@ All notable changes to busybar-calendar. The format follows
 
 ### Changed
 
+- `scripts/capture_screens.py` draws the tentative status for the README, and
+  its docs now say that a capture takes a running service's screen down until
+  the service redraws.
 - The screen is redrawn when you change your answer to an event that is
   already up - marked "maybe" from your phone, say - at the next refresh,
   not only when the screen changes.
