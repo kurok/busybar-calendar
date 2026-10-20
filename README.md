@@ -1,10 +1,9 @@
 # busybar-calendar
 
 Calendar reminders for the [BUSY Bar](https://busy.app) from **any CalDAV
-account or ICS feed**, shown exactly the way the bar shows its built-in
-Google Calendar events.
+account or ICS feed**, in four screen designs.
 
-![A reminder on the BUSY Bar: calendar icon, title and countdown](docs/images/reminder.gif)
+![Four screen designs on a real BUSY Bar: default, banner, bold title, and words with an event marked Maybe](docs/images/designs.png)
 
 The bar's own [Google Calendar integration](https://docs.busy.app/bar/apps-and-integrations/google-calendar)
 runs in BUSY Cloud and only talks to Google. This does the same thing for
@@ -12,21 +11,82 @@ iCloud, Fastmail, Nextcloud, PrivateEmail, self-hosted CalDAV servers, and
 any calendar published as an ICS link (Outlook, Google, Proton). It runs on
 a machine of yours and draws through the bar's
 [HTTP API](https://docs.busy.app/bar/dev/http-api), via BUSY Cloud or on the
-LAN. The events look the same as Google's; only where they come from is
-different. Requested upstream as
+LAN. The default design looks the same as Google's events; only where they come
+from is different. Requested upstream as
 [busybar-firmware#1086](https://github.com/busy-app/busybar-firmware/issues/1086).
 
-## On the bar
+## Screen designs
 
 Every picture here is a frame read back from a real bar (firmware 1.2.4)
-through `GET /api/screen`.
+through `GET /api/screen`; the one at the top is four of them side by side.
+
+`busybar-calendar init` asks which design to draw. The first, the default, is what
+you get if you do not choose. To change it later, set `layout` under `[display]`;
+the running service applies it within a minute.
+
+### 1. Default
+
+The calendar icon, the title, a countdown that ticks on the bar, and BUSY while
+the event runs. A Maybe gets a yellow calendar and a yellow BUSY.
+
+| Before the event | During the event | Marked "Maybe" |
+| --- | --- | --- |
+| ![Default design, before the event](docs/images/reminder.png) | ![Default design, during the event](docs/images/status.png) | ![Default design, marked Maybe](docs/images/status-tentative.png) |
+
+### 2. Banner (`layout = "banner"`)
+
+The title on a band of the state colour: white before the start, red during an
+event you accepted, and a yellow outline with a yellow title for a Maybe. The
+countdown and BUSY sit below.
+
+| Before the event | During the event | Marked "Maybe" |
+| --- | --- | --- |
+| ![Banner design, before the event](docs/images/design-banner-reminder.png) | ![Banner design, during the event](docs/images/design-banner.png) | ![Banner design, marked Maybe](docs/images/design-banner-maybe.png) |
+
+The filled red band has black lettering, which reads best close up. The hollow
+Maybe band reads best from a distance.
+
+### 3. Bold title (`layout = "bold_title"`)
+
+The title in the larger 7 px font across the top, and the countdown and the label
+below it in the state colour: white before the start, red when accepted. A Maybe is
+yellow and says MAYBE. There is no icon.
+
+| Before the event | During the event | Marked "Maybe" |
+| --- | --- | --- |
+| ![Bold title design, before the event](docs/images/design-bold-title-reminder.png) | ![Bold title design, during the event](docs/images/design-bold-title.png) | ![Bold title design, marked Maybe](docs/images/design-bold-title-maybe.png) |
+
+### 4. Words (`layout = "words"`)
+
+The default look with the response in words: a Maybe says MAYBE where BUSY would be,
+and already does in its reminder, so it reads without relying on colour.
+
+| Before the event | During the event | Marked "Maybe" |
+| --- | --- | --- |
+| ![Words design, before the event](docs/images/design-words-reminder.png) | ![Words design, during the event](docs/images/design-words.png) | ![Words design, marked Maybe](docs/images/design-words-maybe.png) |
+
+### What they share
+
+- The countdown ticks on the bar itself in all four, so nothing is sent each second.
+- Banner and Bold title draw the title in the 7 px font (the 11 px `global` font with
+  `title_font = "global"`) and have no icon, so `title_font = "small"`,
+  `reminder_icon` and `event_icon` do not apply to them.
+- A title that does not fit scrolls, in every design. In the new ones it is scrolled
+  only when its real width does not fit.
+- `tentative_yellow = false` draws a Maybe like an accepted event in every design.
+- A status such as `meeting` is drawn the same in every design.
+- The three extra designs were picked from ten whole-screen concepts, each scored on
+  legibility, how well it tells a Maybe from an accepted event (also for red-green
+  colour blindness), information, stress cases, load on the panel and effort to run.
+  Those scoring over 70 of 100 were kept.
+
+## The rest of the screen
+
+These pictures show the default design.
 
 | | |
 | --- | --- |
-| **Before the event** - a red calendar, the title, and a countdown to the start. | ![Reminder](docs/images/reminder.gif) |
-| **During the event** - a red calendar, the title, a countdown to the end and a red **BUSY** ... | ![Status with the event name](docs/images/status.png) |
-| **Marked "Maybe"** (tentative): a yellow calendar and a yellow **BUSY**, in the reminder and during the event, so you can tell it from one you accepted. | ![Status of a tentative event](docs/images/status-tentative.png) |
-| ... or one of the bar's own statuses, such as `meeting`, `on_call` or `dnd`. | ![Meeting status](docs/images/status-meeting.gif) |
+| One of the bar's own statuses, such as `meeting`, `on_call` or `dnd`, instead of the event name. | ![Meeting status](docs/images/status-meeting.gif) |
 | **Long titles** scroll beside the icon. | ![Scrolling title](docs/images/long-title.gif) |
 | **Titles in other scripts** are transliterated for the bar's bitmap fonts (`Планування спринту` becomes `Planuvannya sprintu`) ... | ![Transliterated title](docs/images/cyrillic-transliterated.gif) |
 | ... or drawn as they are with `title_font = "global"`, on one line beside the countdown. | ![Cyrillic title in the global font](docs/images/cyrillic-global.gif) |
@@ -36,32 +96,6 @@ Like Google events, these go in above an active BUSY session, so they show
 on top of any status. A sound plays as a reminder opens and as an event
 starts, using the bar's own calendar sounds. After the event, the bar goes
 back to whatever it was showing.
-
-## Screen designs
-
-Four designs for the same information. `busybar-calendar init` asks which one to
-draw, and the first, the default, is what you get if you do not choose. To change
-it later, set `layout` under `[display]`; the running service applies it within a
-minute.
-
-| Design | An event you accepted | Marked "Maybe" |
-| --- | --- | --- |
-| **1. Default** (`default`): the calendar icon, the title, a ticking countdown and BUSY. A Maybe gets a yellow calendar and a yellow BUSY. | ![Default design](docs/images/status.png) | ![Default design, Maybe](docs/images/status-tentative.png) |
-| **2. Banner** (`banner`): the title on a band of the state colour, the countdown and BUSY below. Red when accepted, white before the start, and a yellow outline for a Maybe. | ![Banner design](docs/images/design-banner.png) | ![Banner design, Maybe](docs/images/design-banner-maybe.png) |
-| **3. Bold title** (`bold_title`): the title in the larger 7 px font, the countdown and the label in the state colour, no icon. A Maybe says MAYBE. | ![Bold title design](docs/images/design-bold-title.png) | ![Bold title design, Maybe](docs/images/design-bold-title-maybe.png) |
-| **4. Words** (`words`): the default look, with the response in words: MAYBE where BUSY would be, already in the reminder. | ![Words design](docs/images/design-words.png) | ![Words design, Maybe](docs/images/design-words-maybe.png) |
-
-The countdown ticks on the bar itself in all four. Banner and Bold title draw the
-title in the 7 px font (the 11 px `global` font with `title_font = "global"`), so
-`title_font = "small"` and the icon options do not apply to them. A title that does
-not fit scrolls, in every design. A Maybe looks like an accepted event when
-`tentative_yellow` is off.
-
-The three extra designs were picked from ten whole-screen concepts, each scored on
-legibility, how well it tells a Maybe from an accepted event (also for red-green
-colour blindness), information, stress cases, load on the panel, and effort to run;
-those scoring over 70 of 100 were kept. Banner's filled red band has black lettering
-that reads best close up; the hollow Maybe band reads best from a distance.
 
 ## Features
 
@@ -81,9 +115,10 @@ that reads best close up; the hollow Maybe band reads best from a distance.
   they start together and when they are shifted against each other, so a
   "maybe" never covers a meeting you said yes to; then, as in Google's
   integration, the newest event wins.
-- **"Maybe" in yellow**: an event you marked tentative gets a yellow
-  calendar and a yellow BUSY, so you can tell it from one you accepted
-  (`display.tentative_yellow`, default on).
+- **A Maybe you can tell**: an event you marked tentative is yellow in every
+  design (`display.tentative_yellow`, default on), and three of the designs add a
+  shape or a word so colour is not the only cue.
+- **Four screen designs**, chosen in `init` or with `display.layout`; see above.
 - **Google's filters**: no all-day or 24-hour-plus events. Also skipped:
   cancelled events, events marked free, invitations you declined.
 - **On time**: the loop wakes at the next change, not on the next poll.
@@ -106,8 +141,8 @@ busybar-calendar install  # runs it in the background from now on
 
 `init` asks how to reach the bar (BUSY Cloud, Wi-Fi or USB) and which
 calendar to read, keeps the passwords in the macOS Keychain (libsecret on
-Linux), signs in so you can pick calendars, and writes
-`~/.config/busybar-calendar/config.toml`. To write the config yourself,
+Linux), signs in so you can pick calendars, asks which screen design to draw, and
+writes `~/.config/busybar-calendar/config.toml`. To write the config yourself,
 start from [`config.example.toml`](config.example.toml).
 
 ## Everyday commands
@@ -121,8 +156,8 @@ start from [`config.example.toml`](config.example.toml).
 | `busybar-calendar restart` | After a new password or a `[bar]` change; other config edits apply by themselves within a minute. |
 | `busybar-calendar upcoming` | The events the bar will show, and when; tentative ones marked. |
 | `busybar-calendar calendars` | What each CalDAV account has, with ids, for `include`. |
-| `busybar-calendar replay` | Tomorrow's events on the bar, a minute each. |
-| `busybar-calendar demo` | A sample reminder on the bar, to see the look. |
+| `busybar-calendar replay` | Tomorrow's events on the bar, a minute each, in your design. |
+| `busybar-calendar demo` | A sample reminder on the bar, to see the look of your design. |
 | `busybar-calendar uninstall` | Stop and remove the background service. |
 
 `status` and `check` also take `--json`, for scripts. A newer version is
