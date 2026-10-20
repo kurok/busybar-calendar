@@ -19,4 +19,36 @@ jobs:
       - run: uv sync --frozen
       - run: uv run ruff check .
       - run: uv run ruff format --check .
-      - run: uv run pytest
+      - run: uv run pytest -m "not emulator"
+
+  # The app against the BUSY Bar emulator (tests/emulator): a bar that enforces the firmware's
+  # draw contract, which the fake bar of the other tests does not.
+  emulator:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      matrix:
+        python: ["3.12", "3.14", "3.15"]
+    env:
+      BUSYBAR_EMULATOR: ${{ github.workspace }}/.emulator
+      # A missing emulator fails the tests here instead of skipping them.
+      BUSYBAR_EMULATOR_REQUIRED: "1"
+    steps:
+      - uses: actions/checkout@v7
+      # Third-party code that runs in this job, so it is pinned to a commit that has been read
+      # through (server.js and status_ws.js: no dependencies, no network access, no shell). To
+      # move the pin, read the diff of those two files between the old commit and the new one.
+      - uses: actions/checkout@v7
+        with:
+          repository: maxswinkels/busybar-emulator
+          ref: 46648bc7ce7f9e2a69afdfaad7c8314e315ed205 # main, 2026-08-07
+          path: .emulator
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - uses: astral-sh/setup-uv@v10.3.0
+        with:
+          python-version: ${{ matrix.python }}
+      - run: uv sync --frozen
+      - run: uv run pytest tests/emulator -ra

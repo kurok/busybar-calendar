@@ -238,6 +238,22 @@ uv run pytest
 uv run ruff check . && uv run ruff format --check .
 ```
 
+The tests in `tests/emulator` run the app against the
+[BUSY Bar emulator](https://github.com/maxswinkels/busybar-emulator), a bar that rejects
+a drawing the firmware would: they draw every design and screen, run the service and the
+commands, and check what ends up on the display. CI runs them against
+[a pinned commit](.github/workflows/ci.yml) of the emulator. To run them yourself, clone it
+(its server has no dependencies, so there is nothing to install) and point the tests at it:
+
+```sh
+git clone https://github.com/maxswinkels/busybar-emulator .emulator
+BUSYBAR_EMULATOR=.emulator uv run pytest tests/emulator
+```
+
+Without `BUSYBAR_EMULATOR` they are skipped, and `-m "not emulator"` leaves them out. They
+never touch a real bar or calendar: the emulator listens on loopback, and the app runs in
+them with a fresh `HOME`, so it cannot find your config.
+
 `scripts/capture_screens.py` regenerates `docs/images` from a real bar.
 
 ## License
