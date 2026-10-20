@@ -6,6 +6,8 @@ All notable changes to busybar-calendar. The format follows
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-10-20
+
 ### Added
 
 - Three more screen designs besides the default, chosen with `[display] layout` and
@@ -24,6 +26,9 @@ All notable changes to busybar-calendar. The format follows
 - A title in the new designs scrolls only when it really does not fit, from the real
   width of each character in the 7px and 11px fonts (`fontmetrics.py`).
 - `scripts/capture_screens.py` draws the new designs, for the README.
+
+### Changed
+
 - CI runs the app against the BUSY Bar emulator (`tests/emulator`), which rejects what
   the firmware would: every design and screen, the service and the commands, `app.py`.
   The other tests draw on a fake bar that accepts anything.
@@ -285,7 +290,8 @@ Found on a bar running firmware 1.2.4, and recorded in
 - A refused draw (409) stopped the demo and replay.
 - A Ctrl-C during the slow first start printed a traceback.
 
-[Unreleased]: https://github.com/kurok/busybar-calendar/compare/v0.8.0...HEAD
+[Unreleased]: https://github.com/kurok/busybar-calendar/compare/v0.9.0...HEAD
+[0.9.0]: https://github.com/kurok/busybar-calendar/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/kurok/busybar-calendar/compare/v0.7.2...v0.8.0
 [0.7.2]: https://github.com/kurok/busybar-calendar/compare/v0.7.1...v0.7.2
 [0.7.1]: https://github.com/kurok/busybar-calendar/compare/v0.7.0...v0.7.1
