@@ -24,6 +24,9 @@ All notable changes to busybar-calendar. The format follows
 - A title in the new designs scrolls only when it really does not fit, from the real
   width of each character in the 7px and 11px fonts (`fontmetrics.py`).
 - `scripts/capture_screens.py` draws the new designs, for the README.
+- CI runs the app against the BUSY Bar emulator (`tests/emulator`), which rejects what
+  the firmware would: every design and screen, the service and the commands, `app.py`.
+  The other tests draw on a fake bar that accepts anything.
 
 ## [0.8.0] - 2026-10-20
 

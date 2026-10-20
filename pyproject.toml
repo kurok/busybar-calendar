@@ -28,6 +28,9 @@ build-backend = "hatchling.build"
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+markers = [
+  "emulator: runs against a checkout of the BUSY Bar emulator (BUSYBAR_EMULATOR), see tests/emulator",
+]
 
 [tool.ruff]
 line-length = 100
